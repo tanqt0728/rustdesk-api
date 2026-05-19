@@ -91,6 +91,9 @@ func Init(rowVal *Config, path string) *viper.Viper {
 	if err := v.Unmarshal(rowVal); err != nil {
 		panic(fmt.Errorf("Fatal error config: %s \n", err))
 	}
+	if adminAddr := v.GetString("gin.admin-addr"); adminAddr != "" {
+		rowVal.Gin.AdminAddr = adminAddr
+	}
 	rowVal.Rustdesk.LoadKeyFile()
 	rowVal.Admin.Init()
 	return v

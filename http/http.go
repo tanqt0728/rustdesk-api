@@ -12,6 +12,33 @@ import (
 
 func ApiInit() {
 	gin.SetMode(global.Config.Gin.Mode)
+	if global.Config.Gin.AdminAddr != "" {
+		public := newEngine()
+		router.WebInit(public, false)
+		router.ApiInit(public)
+
+		admin := newEngine()
+		router.WebInit(admin, true)
+		router.ApiInit(admin)
+		router.Init(admin)
+		go func() {
+			global.Logger.Infof("ADMIN SERVER START (%s)", global.Config.Gin.AdminAddr)
+			Run(admin, global.Config.Gin.AdminAddr)
+		}()
+
+		global.Logger.Infof("PUBLIC API SERVER START (%s), admin is split", global.Config.Gin.ApiAddr)
+		Run(public, global.Config.Gin.ApiAddr)
+		return
+	}
+
+	g := newEngine()
+	router.WebInit(g, true)
+	router.Init(g)
+	router.ApiInit(g)
+	Run(g, global.Config.Gin.ApiAddr)
+}
+
+func newEngine() *gin.Engine {
 	g := gin.New()
 
 	//[WARNING] You trusted all proxies, this is NOT safe. We recommend you to set a value.
@@ -34,8 +61,5 @@ func ApiInit() {
 		c.String(http.StatusNotFound, "404 not found")
 	})
 	g.Use(middleware.Logger(), middleware.Limiter(), gin.Recovery())
-	router.WebInit(g)
-	router.Init(g)
-	router.ApiInit(g)
-	Run(g, global.Config.Gin.ApiAddr)
+	return g
 }

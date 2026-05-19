@@ -112,6 +112,7 @@ func (g *Group) Peers(c *gin.Context) {
 		}
 		pp := &apiResp.GroupPeerPayload{}
 		pp.FromPeer(peer, uname, dGroupName)
+		pp.SameClientIp = peer.LastOnlineIp != "" && peer.LastOnlineIp == c.ClientIP()
 		data = append(data, pp)
 
 	}

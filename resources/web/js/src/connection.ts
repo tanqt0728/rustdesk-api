@@ -18,7 +18,7 @@ let HOST = localStorage.getItem("rendezvous-server") || HOSTS[0];
 const SCHEMA=location.protocol=="https:"?"wss://":"ws://";
 
 type MsgboxCallback = (type: string, title: string, text: string) => void;
-type DrawCallback = (data: Uint8Array) => void;
+type DrawCallback = (data: Uint8Array) => boolean | void;
 //const cursorCanvas = document.createElement("canvas");
 
 export default class Connection {
@@ -331,7 +331,7 @@ export default class Connection {
   }
 
   draw(frame: any) {
-    this._draw?.(frame);
+    if (this._draw?.(frame) === true) return;
     globals.draw(frame);
   }
 

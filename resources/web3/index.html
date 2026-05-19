@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>QT Desk Web v3</title>
+  <link rel="stylesheet" href="/web3/styles.css?v=20260519-input-layer1">
+</head>
+<body>
+  <main class="web3-shell">
+    <header id="hud" class="toolbar hud-collapsed">
+      <button id="hudToggle" class="hud-summary" type="button" aria-expanded="false" title="Show controls" onclick="window.qtDeskToggleHud && window.qtDeskToggleHud()">
+        <span id="sessionStatus" class="status-pill">Preparing</span>
+        <strong id="hudPeerLabel">Web v3</strong>
+        <span>Menu</span>
+      </button>
+      <div id="hudPanel" class="hud-panel">
+        <div class="hud-heading" onpointerdown="window.qtDeskStartHudDrag && window.qtDeskStartHudDrag(event)" onmousedown="window.qtDeskStartHudDrag && window.qtDeskStartHudDrag(event)">
+          <div>
+            <p class="eyebrow">QT Desk</p>
+            <h1 id="peerTitle">Web v3</h1>
+          </div>
+          <div class="hud-heading-actions">
+            <button id="infoToggle" class="icon-button" type="button" title="Session info">Info</button>
+            <button id="hudClose" class="icon-button" type="button" title="Hide controls">Close</button>
+          </div>
+        </div>
+        <div class="toolbar-actions">
+          <button id="connectBtn" class="icon-button primary" type="button" title="Connect">Connect</button>
+          <button id="disconnectBtn" class="icon-button" type="button" title="Disconnect">Disconnect</button>
+          <button id="reconnectBtn" class="icon-button" type="button" title="Reconnect">Reconnect</button>
+          <button id="fullscreenBtn" class="icon-button" type="button" title="Fullscreen">Fullscreen</button>
+          <label class="control-field experience-field">
+            <span>Mode</span>
+            <select id="qualitySelect">
+              <option value="low">Fast</option>
+              <option value="balanced">Balanced</option>
+              <option value="best">Quality</option>
+            </select>
+          </label>
+          <button id="copyCompatBtn" class="icon-button" type="button">Fix browser video</button>
+
+          <details class="advanced-panel">
+            <summary>Advanced</summary>
+            <div class="advanced-grid">
+              <label class="control-field">
+                <span>Scale</span>
+                <select id="scaleSelect">
+                  <option value="adaptive">Adaptive</option>
+                  <option value="original">Original</option>
+                  <option value="stretch">Stretch</option>
+                </select>
+              </label>
+              <label class="control-field">
+                <span>FPS</span>
+                <select id="fpsSelect">
+                  <option value="15">15</option>
+                  <option value="20">20</option>
+                  <option value="30">30</option>
+                  <option value="60">60</option>
+                </select>
+              </label>
+              <label class="control-field">
+                <span>Display</span>
+                <select id="displaySelect" disabled>
+                  <option value="0">1</option>
+                </select>
+              </label>
+              <label class="toggle-field"><input id="cursorToggle" type="checkbox"> Cursor</label>
+              <label class="toggle-field"><input id="muteToggle" type="checkbox"> Mute</label>
+              <label class="toggle-field"><input id="clipboardToggle" type="checkbox"> Clipboard off</label>
+              <label class="toggle-field"><input id="videoCompatToggle" type="checkbox"> Video boost</label>
+              <label class="toggle-field"><input id="monitorToggle" type="checkbox" onchange="window.qtDeskSetSetting && window.qtDeskSetSetting('showMonitor', this.checked)" oninput="window.qtDeskSetSetting && window.qtDeskSetSetting('showMonitor', this.checked)"> Monitor</label>
+              <label class="toggle-field"><input id="directYuvToggle" type="checkbox"> Direct YUV</label>
+              <button id="captureHelpBtn" class="icon-button" type="button" title="Video diagnostics">Diagnostics</button>
+            </div>
+          </details>
+        </div>
+          <div id="capturePanel" class="capture-panel" hidden>
+            <div class="capture-grid">
+              <div><span>Frames</span><strong id="captureFrames">0 / 0</strong></div>
+              <div><span>Renderer</span><strong id="captureRenderer">Idle</strong></div>
+              <div><span>Video mode</span><strong id="captureVideoMode">Off</strong></div>
+              <div><span>Last frame</span><strong id="captureLastFrame">-</strong></div>
+              <div><span>Dark frames</span><strong id="captureDarkFrames">0</strong></div>
+              <div><span>Transport</span><strong id="captureTransport">-</strong></div>
+            </div>
+            <p id="captureAdvice" class="capture-advice">No remote frame has arrived yet.</p>
+            <div class="capture-actions">
+              <button id="copySafeBrowserBtn" class="icon-button" type="button">Copy safe browser</button>
+              <button id="copyMpoBtn" class="icon-button" type="button">Copy MPO fix</button>
+            </div>
+          </div>
+        </div>
+      </header>
+
+    <section class="stage preconnect" id="stage">
+      <canvas id="remoteVideoCanvas" width="1280" height="720" aria-hidden="true"></canvas>
+      <canvas id="remoteCanvas" width="1280" height="720" tabindex="0"></canvas>
+      <div id="connectPanel" class="connect-panel">
+        <form id="connectForm" class="connect-card" autocomplete="off">
+          <div class="connect-brand">
+            <p class="eyebrow">QT Desk Web v3</p>
+            <h2>Connect to <span id="connectPeerName">remote desktop</span></h2>
+          </div>
+          <p id="connectHint" class="connect-hint">Enter a RustDesk ID or sign in to pick one of your devices.</p>
+          <label class="password-field">
+            <span>Remote ID</span>
+            <input id="connectPeerId" inputmode="numeric" autocomplete="off" placeholder="Example: 236174636">
+          </label>
+          <label class="password-field">
+            <span>Remote password</span>
+            <input id="connectPassword" type="password" autocomplete="current-password" placeholder="Leave blank if not required">
+          </label>
+          <details id="loginBox" class="login-box">
+            <summary>Sign in and choose device</summary>
+            <div id="loginState" class="login-state">Not signed in</div>
+            <div class="login-grid">
+              <input id="loginUsername" autocomplete="username" placeholder="Username">
+              <input id="loginPassword" type="password" autocomplete="current-password" placeholder="Password">
+              <button id="loginBtn" class="icon-button" type="button">Sign in</button>
+              <button id="logoutBtn" class="icon-button" type="button" hidden>Sign out</button>
+            </div>
+            <div id="deviceList" class="device-list"></div>
+          </details>
+          <div class="connect-actions">
+            <button id="connectSubmitBtn" class="icon-button primary" type="submit">Connect</button>
+            <button id="connectSettingsBtn" class="icon-button" type="button" onclick="window.qtDeskToggleHud && window.qtDeskToggleHud()">Settings</button>
+          </div>
+        </form>
+      </div>
+      <div id="transportPanel" class="transport-panel" hidden>
+        <div class="transport-card">
+          <p class="eyebrow">Connection</p>
+          <h2 id="transportTitle">Connection interrupted</h2>
+          <p id="transportText">The remote stream stopped unexpectedly.</p>
+          <div class="transport-actions">
+            <button id="transportReconnectBtn" class="icon-button primary" type="button">Reconnect</button>
+            <button id="transportConnectBtn" class="icon-button" type="button">Connection screen</button>
+          </div>
+        </div>
+      </div>
+      <aside id="qualityMonitor" class="quality-monitor" hidden>
+        <div><span>FPS</span><strong id="monitorFps">-</strong></div>
+        <div><span>Render</span><strong id="monitorRender">-</strong></div>
+        <div><span>Received</span><strong id="monitorReceived">0</strong></div>
+        <div><span>Decoder</span><strong id="monitorDecoder">-</strong></div>
+        <div><span>GL</span><strong id="monitorGl">-</strong></div>
+        <div><span>Mode</span><strong id="monitorMode">Idle</strong></div>
+        <div><span>Dropped</span><strong id="monitorDropped">0</strong></div>
+        <div><span>Quality</span><strong id="monitorQuality">-</strong></div>
+      </aside>
+      <div id="stageOverlay" class="stage-overlay">
+        <strong id="overlayTitle">Preparing session</strong>
+        <span id="overlayText">Connecting to Web v3 backend</span>
+      </div>
+    </section>
+
+    <footer id="sessionBar" class="session-bar">
+      <div>
+        <span>Peer</span>
+        <strong id="peerId">-</strong>
+      </div>
+      <div>
+        <span>Permissions</span>
+        <strong id="permissions">-</strong>
+      </div>
+      <div>
+        <span>Expires</span>
+        <strong id="expiresAt">-</strong>
+      </div>
+    </footer>
+  </main>
+  <script>
+    (async function qtDeskClearOldWebCaches() {
+      try {
+        if ("serviceWorker" in navigator) {
+          const registrations = await navigator.serviceWorker.getRegistrations();
+          await Promise.all(registrations.map((registration) => {
+            const scope = String(registration.scope || "");
+            if (scope.includes("/web3") || scope.includes("/webclient")) {
+              return registration.unregister();
+            }
+            return Promise.resolve(false);
+          }));
+        }
+        if (window.caches?.keys) {
+          const keys = await window.caches.keys();
+          await Promise.all(keys.map((key) => {
+            const lower = String(key || "").toLowerCase();
+            if (lower.includes("web3") || lower.includes("rustdesk") || lower.includes("webclient")) {
+              return window.caches.delete(key);
+            }
+            return Promise.resolve(false);
+          }));
+        }
+      } catch (error) {
+        console.debug("QT Desk cache cleanup skipped", error);
+      }
+    })();
+  </script>
+  <script src="/web3/app.js?v=20260519-input-layer1"></script>
+</body>
+</html>

@@ -1,0 +1,581 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>RustDesk Admin</title>
+  <link rel="stylesheet" href="/_admin/styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark">R</div>
+        <div>
+          <strong>RustDesk</strong>
+          <span>Self-host Admin</span>
+        </div>
+      </div>
+      <nav class="nav">
+        <button class="nav-item active" data-view="dashboard">Dashboard</button>
+        <button class="nav-item" data-view="devices">Devices</button>
+        <button class="nav-item" data-view="addressbook">Address Book</button>
+        <button class="nav-item" data-view="web">Web Access</button>
+        <button class="nav-item admin-only" data-view="customclients">Custom Clients</button>
+        <button class="nav-item admin-only" data-resource="users">Users</button>
+        <button class="nav-item admin-only" data-view="logs">Logs</button>
+        <button class="nav-item" data-view="settings">Settings</button>
+        <button class="nav-item admin-only" data-view="deployment">Deployment</button>
+        <button class="nav-item admin-only" data-view="backup">Backup</button>
+      </nav>
+      <div class="sidebar-footer">
+        <a class="ghost-link" href="/web3/" target="_blank" rel="noreferrer">Open Web v3</a>
+        <button id="logoutBtn" class="ghost-link" type="button">Sign out</button>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">Private control plane</p>
+          <h1 id="pageTitle">Dashboard</h1>
+        </div>
+        <div class="topbar-actions">
+          <button id="refreshBtn" class="button secondary" type="button">Refresh</button>
+          <span id="sessionUser" class="session-user">Not signed in</span>
+        </div>
+      </header>
+
+      <section id="loginPanel" class="login-panel">
+        <div class="login-copy">
+          <p class="eyebrow">Admin access</p>
+          <h2>Manage your RustDesk API server</h2>
+          <p>Sign in with your RustDesk admin account to review devices, logs, server settings and backups.</p>
+        </div>
+        <form id="loginForm" class="login-form">
+          <label>Username<input id="username" autocomplete="username" value="admin"></label>
+          <label>Password<input id="password" type="password" autocomplete="current-password"></label>
+          <button class="button primary" type="submit">Sign in</button>
+          <div id="oauthPanel" class="oauth-panel hidden">
+            <div class="divider"><span>or</span></div>
+            <div id="oauthButtons" class="oauth-buttons"></div>
+          </div>
+          <p id="loginError" class="form-error"></p>
+        </form>
+      </section>
+
+      <section id="contentPanel" class="content-panel hidden">
+        <div id="dashboardView" class="view active">
+          <section class="hero-panel">
+            <div class="hero-copy">
+              <p class="eyebrow">Live overview</p>
+              <h2>Private RustDesk control center</h2>
+              <p id="dashboardSummary">Loading server state...</p>
+            </div>
+            <div class="hero-actions">
+              <button class="button primary" type="button" data-view-jump="web">Web Access</button>
+              <button class="button secondary" type="button" data-view-jump="devices">Devices</button>
+              <a class="button secondary button-link" href="/web3/" target="_blank" rel="noreferrer">Open Web v3</a>
+            </div>
+          </section>
+
+          <div class="metrics">
+            <div class="metric"><span>Devices</span><strong id="metricDevices">0</strong></div>
+            <div class="metric"><span>Users</span><strong id="metricUsers">0</strong></div>
+            <div class="metric"><span>Address book</span><strong id="metricAddressBook">0</strong></div>
+            <div class="metric"><span>WebClient</span><strong id="metricWebClient">Off</strong></div>
+          </div>
+
+          <div class="quick-grid">
+            <button class="quick-card" type="button" data-view-jump="web">
+              <span>Web v3</span>
+              <strong id="quickWebState">Checking</strong>
+              <small>Sessions, shares, audit</small>
+            </button>
+            <button class="quick-card" type="button" data-view-jump="devices">
+              <span>Devices</span>
+              <strong id="quickDeviceState">0 ready</strong>
+              <small>Open app or browser control</small>
+            </button>
+            <button class="quick-card admin-only" type="button" data-resource-shortcut="oauth">
+              <span>Login</span>
+              <strong id="quickLoginState">Password</strong>
+              <small>OAuth and WebAuth setup</small>
+            </button>
+            <button class="quick-card admin-only" type="button" data-view-jump="backup">
+              <span>Backup</span>
+              <strong>Export</strong>
+              <small>Database, config, server key</small>
+            </button>
+          </div>
+
+          <div class="split">
+            <section class="panel">
+              <div class="panel-head"><h2>Server readiness</h2></div>
+              <div id="readinessList" class="status-list"></div>
+            </section>
+            <section class="panel">
+              <div class="panel-head"><h2>Connectable devices</h2></div>
+              <div id="recentDevices" class="compact-list"></div>
+            </section>
+          </div>
+
+          <section class="panel">
+            <div class="panel-head">
+              <h2>Server config</h2>
+              <button class="mini-button" type="button" data-view-jump="settings">Settings</button>
+            </div>
+            <dl class="config-list config-list-wide">
+              <dt>ID server</dt><dd id="cfgIdServer">-</dd>
+              <dt>Relay server</dt><dd id="cfgRelayServer">-</dd>
+              <dt>API server</dt><dd id="cfgApiServer">-</dd>
+              <dt>Public key</dt><dd id="cfgKey">-</dd>
+            </dl>
+          </section>
+        </div>
+
+        <div id="webView" class="view">
+          <section class="hero-panel web-hero">
+            <div class="hero-copy">
+              <p class="eyebrow">Web v3</p>
+              <h2>Browser remote access</h2>
+              <p id="webAccessSummary">Loading Web v3 state...</p>
+            </div>
+            <div class="hero-actions">
+              <a class="button primary button-link" href="/web3/" target="_blank" rel="noreferrer">Open Web v3</a>
+              <button class="button secondary" type="button" data-view-jump="devices">Choose device</button>
+            </div>
+          </section>
+
+          <div class="metrics">
+            <div class="metric"><span>Active sessions</span><strong id="metricWebSessions">0</strong></div>
+            <div class="metric"><span>Open shares</span><strong id="metricWebShares">0</strong></div>
+            <div class="metric"><span>Default expiry</span><strong id="metricWebExpiry">1h</strong></div>
+            <div class="metric"><span>Direct mode</span><strong id="metricWebDirect">Login</strong></div>
+          </div>
+
+          <div class="split">
+            <section class="panel">
+              <div class="panel-head">
+                <h2>Web v3 operations</h2>
+              </div>
+              <div class="action-grid">
+                <button class="action-card" type="button" data-resource-shortcut="webV3Sessions">
+                  <strong>Sessions</strong>
+                  <span>Review or revoke browser sessions</span>
+                </button>
+                <button class="action-card" type="button" data-resource-shortcut="webV3Shares">
+                  <strong>Shares</strong>
+                  <span>Manage share links and expiry</span>
+                </button>
+                <button class="action-card" type="button" data-resource-shortcut="webV3Audit">
+                  <strong>Audit</strong>
+                  <span>Trace Web v3 events</span>
+                </button>
+                <button class="action-card" type="button" data-view-jump="devices">
+                  <strong>Create share</strong>
+                  <span>Pick a device row and use Share Web</span>
+                </button>
+                <button id="webV3CleanupSessionsBtn" class="action-card admin-only" type="button">
+                  <strong>Clean stale</strong>
+                  <span>Mark dead browser sessions disconnected</span>
+                </button>
+              </div>
+              <p id="webV3CleanupStatus" class="hint compact-hint"></p>
+            </section>
+
+            <section class="panel">
+              <div class="panel-head"><h2>Policy snapshot</h2></div>
+              <dl class="config-list">
+                <dt>Enabled</dt><dd id="webPolicyEnabled">-</dd>
+                <dt>Permissions</dt><dd id="webPolicyPermissions">-</dd>
+                <dt>Clipboard</dt><dd id="webPolicyClipboard">-</dd>
+                <dt>File transfer</dt><dd id="webPolicyFiles">-</dd>
+              </dl>
+            </section>
+          </div>
+
+          <section class="panel">
+            <div class="panel-head"><h2>Connection endpoints</h2></div>
+            <dl class="config-list config-list-wide">
+              <dt>ID server</dt><dd id="webCfgIdServer">-</dd>
+              <dt>Relay server</dt><dd id="webCfgRelayServer">-</dd>
+              <dt>API server</dt><dd id="webCfgApiServer">-</dd>
+              <dt>Public key</dt><dd id="webCfgKey">-</dd>
+            </dl>
+          </section>
+        </div>
+
+        <div id="devicesView" class="view">
+          <section class="panel">
+            <div class="panel-head">
+              <div>
+                <h2>Devices</h2>
+                <p class="hint compact-hint">Open the native RustDesk app, start Web v3, or create a share link from the same row.</p>
+              </div>
+              <input id="deviceSearch" class="search" placeholder="Filter by ID, host or user">
+            </div>
+            <div class="table-wrap"><table><thead><tr><th>ID</th><th>Host</th><th>User</th><th>Version</th><th>Last IP</th><th>Last online</th><th></th></tr></thead><tbody id="devicesTable"></tbody></table></div>
+          </section>
+        </div>
+
+        <div id="mydevicesView" class="view">
+          <section class="panel">
+            <div class="panel-head">
+              <h2>My devices</h2>
+              <input id="myDeviceSearch" class="search" placeholder="Filter my devices">
+            </div>
+            <div class="table-wrap"><table><thead><tr><th>ID</th><th>Host</th><th>User</th><th>Version</th><th>Last IP</th><th>Last online</th><th></th></tr></thead><tbody id="myDevicesTable"></tbody></table></div>
+          </section>
+        </div>
+
+        <div id="addressbookView" class="view">
+          <section class="panel">
+            <div class="panel-head">
+              <div>
+                <h2>Address book</h2>
+                <p class="hint compact-hint">Saved devices can reuse stored passwords for WebClient share links.</p>
+              </div>
+              <div class="tabs">
+                <button id="showMyAddressBook" class="tab active" type="button">Mine</button>
+                <button id="showAllAddressBook" class="tab" type="button">All</button>
+              </div>
+            </div>
+            <div class="table-wrap"><table><thead><tr><th>ID</th><th>Alias</th><th>Host</th><th>User</th><th>Platform</th><th>Collection</th><th></th></tr></thead><tbody id="addressBookTable"></tbody></table></div>
+            <p class="hint">Web v3 share links use scoped, short-lived tokens. The legacy WebClient route is still available from advanced record pages.</p>
+          </section>
+        </div>
+
+        <div id="logsView" class="view">
+          <section class="panel">
+            <div class="panel-head">
+              <div>
+                <h2>Logs</h2>
+                <p class="hint compact-hint">Quick access to connection, Web v3, login, file-transfer and share records.</p>
+              </div>
+              <div class="toolbar">
+                <button class="button secondary" type="button" data-resource-shortcut="auditConn">Connections</button>
+                <button class="button secondary" type="button" data-resource-shortcut="webV3Sessions">Web v3 Sessions</button>
+                <button class="button secondary" type="button" data-resource-shortcut="webV3Shares">Web v3 Shares</button>
+                <button class="button secondary" type="button" data-resource-shortcut="webV3Audit">Web v3 Audit</button>
+                <button class="button secondary" type="button" data-resource-shortcut="loginLogs">Logins</button>
+                <button class="button secondary" type="button" data-resource-shortcut="auditFile">Files</button>
+                <button class="button secondary" type="button" data-resource-shortcut="shareRecords">Shares</button>
+              </div>
+            </div>
+            <div class="table-wrap"><table><thead><tr><th>Peer</th><th>From</th><th>Action</th><th>IP</th><th>Created</th></tr></thead><tbody id="auditTable"></tbody></table></div>
+          </section>
+        </div>
+
+        <div id="usersView" class="view">
+          <section class="panel">
+            <div class="panel-head"><h2>Users</h2></div>
+            <div class="table-wrap"><table><thead><tr><th>Username</th><th>Email</th><th>Admin</th><th>Status</th><th>Updated</th></tr></thead><tbody id="usersTable"></tbody></table></div>
+          </section>
+        </div>
+
+        <div id="customclientsView" class="view">
+          <section class="hero-panel">
+            <div class="hero-copy">
+              <p class="eyebrow">Custom clients</p>
+              <h2>Generate managed client profiles</h2>
+              <p>Create deployment-ready RustDesk client profiles for your self-host server. This MVP generates configuration and scripts; binary rebranding/build farm comes later.</p>
+            </div>
+            <div class="hero-actions">
+              <button id="customClientGenerateBtn" class="button primary" type="button">Generate</button>
+              <button id="customClientResetBtn" class="button secondary" type="button">Reset</button>
+            </div>
+          </section>
+
+          <div class="split custom-client-layout">
+            <section class="panel">
+              <div class="panel-head"><h2>Profile</h2></div>
+              <div class="form-grid">
+                <label>Configuration name<input id="ccName" value="QT Edition Windows"></label>
+                <label>Application label<input id="ccAppName" value="RustDesk Selfhost QT"></label>
+                <label>Platform
+                  <select id="ccPlatform">
+                    <option value="windows">Windows</option>
+                    <option value="macos">macOS</option>
+                    <option value="linux">Linux</option>
+                    <option value="android">Android later</option>
+                  </select>
+                </label>
+                <label>Connection type
+                  <select id="ccConnectionType">
+                    <option value="bidirectional">Bidirectional</option>
+                    <option value="incoming">Incoming only</option>
+                    <option value="outgoing">Outgoing only</option>
+                  </select>
+                </label>
+                <label>ID server<input id="ccIdServer" autocomplete="off"></label>
+                <label>Relay server<input id="ccRelayServer" autocomplete="off"></label>
+                <label>API server<input id="ccApiServer" autocomplete="off"></label>
+                <label>Public key<input id="ccPublicKey" autocomplete="off"></label>
+                <label class="full">Note<textarea id="ccNote" class="compact-textarea" placeholder="Internal note for this profile"></textarea></label>
+              </div>
+
+              <h3>Lockdown</h3>
+              <div class="permission-grid">
+                <label><input id="ccDisableInstall" type="checkbox"> Disable installation</label>
+                <label><input id="ccDisableSettings" type="checkbox"> Disable settings</label>
+                <label><input id="ccDisableAddressBook" type="checkbox"> Disable address book</label>
+                <label><input id="ccForceRelay" type="checkbox" checked> Force relay</label>
+                <label><input id="ccDisableAccount" type="checkbox"> Disable user account</label>
+                <label><input id="ccDisableFileTransfer" type="checkbox" checked> Disable file transfer</label>
+                <label><input id="ccDisableClipboard" type="checkbox"> Disable clipboard</label>
+                <label><input id="ccAllowWebSocket" type="checkbox" checked> Allow WebSocket</label>
+              </div>
+
+              <h3>Advanced settings</h3>
+              <div class="form-grid">
+                <label class="full">Default settings<textarea id="ccDefaultSettings" class="compact-textarea" spellcheck="false">allow-websocket=Y</textarea></label>
+                <label class="full">Override settings<textarea id="ccOverrideSettings" class="compact-textarea" spellcheck="false">enable-file-transfer=N</textarea></label>
+              </div>
+            </section>
+
+            <section class="panel">
+              <div class="panel-head">
+                <h2>Generated output</h2>
+                <div class="row-actions">
+                  <button id="customClientCopyConfigBtn" class="mini-button" type="button">Copy config</button>
+                  <button id="customClientCopyScriptBtn" class="mini-button" type="button">Copy script</button>
+                  <button id="customClientDownloadPackageBtn" class="mini-button" type="button">Download package</button>
+                </div>
+              </div>
+              <label>Config string<textarea id="ccConfigString" class="output-textarea" spellcheck="false" readonly></textarea></label>
+              <label>Windows PowerShell script<textarea id="ccWindowsScript" class="output-textarea large" spellcheck="false" readonly></textarea></label>
+              <label>Profile JSON<textarea id="ccProfileJson" class="output-textarea large" spellcheck="false" readonly></textarea></label>
+              <p id="customClientStatus" class="hint">Generate a profile to preview deployment output.</p>
+            </section>
+          </div>
+        </div>
+
+        <div id="settingsView" class="view">
+          <section class="panel">
+            <div class="panel-head"><h2>Settings</h2></div>
+            <div class="settings-grid">
+              <label>ID server<input id="settingsIdServer" autocomplete="off"></label>
+              <label>Relay server<input id="settingsRelayServer" autocomplete="off"></label>
+              <label>API server<input id="settingsApiServer" autocomplete="off"></label>
+              <label>Public key<input id="settingsKey" autocomplete="off"></label>
+            </div>
+            <div class="settings-actions admin-only">
+              <button id="settingsSaveBtn" class="button primary" type="button">Save server settings</button>
+              <button class="button secondary" type="button" data-resource-shortcut="myInfo">My profile</button>
+              <button class="button secondary" type="button" data-resource-shortcut="oauth">OAuth / WebAuth</button>
+              <button class="button secondary" type="button" data-resource-shortcut="groups">Groups</button>
+              <button class="button secondary" type="button" data-resource-shortcut="deviceGroups">Device groups</button>
+              <button class="button secondary" type="button" data-resource-shortcut="serverCmd">Server commands</button>
+            </div>
+            <p id="settingsStatus" class="hint">These values apply to the API config. If Docker environment variables override them, recreate the container after updating deployment env. Use Backup/Restore for full server key migration.</p>
+          </section>
+
+          <section class="panel">
+            <div class="panel-head"><h2>Web v3 policy</h2></div>
+            <div class="settings-grid">
+              <label>Default share expiry seconds<input id="webV3DefaultShareExpiry" type="number" min="60" step="60"></label>
+              <label>Max session duration seconds<input id="webV3MaxSessionDuration" type="number" min="60" step="60"></label>
+            </div>
+            <div class="permission-grid">
+              <label><input id="webV3SettingEnabled" type="checkbox"> Enable Web v3</label>
+              <label><input id="webV3SettingClipboard" type="checkbox"> Clipboard</label>
+              <label><input id="webV3SettingFileTransfer" type="checkbox"> File transfer</label>
+              <label><input id="webV3SettingTerminal" type="checkbox"> Terminal</label>
+              <label><input id="webV3SettingRequireLogin" type="checkbox"> Login for direct mode</label>
+              <label><input id="webV3SettingAnonymousShare" type="checkbox"> Anonymous share links</label>
+            </div>
+            <h3>Default permissions</h3>
+            <div class="permission-grid">
+              <label><input type="checkbox" data-webv3-setting-permission="view"> View</label>
+              <label><input type="checkbox" data-webv3-setting-permission="control_mouse"> Mouse</label>
+              <label><input type="checkbox" data-webv3-setting-permission="control_keyboard"> Keyboard</label>
+              <label><input type="checkbox" data-webv3-setting-permission="clipboard_read"> Clipboard read</label>
+              <label><input type="checkbox" data-webv3-setting-permission="clipboard_write"> Clipboard write</label>
+              <label><input type="checkbox" data-webv3-setting-permission="file_transfer"> File transfer</label>
+            </div>
+            <div class="settings-actions admin-only">
+              <button id="webV3SettingsSaveBtn" class="button primary" type="button">Save Web v3 policy</button>
+            </div>
+            <p id="webV3SettingsStatus" class="hint">Saved Web v3 policy affects new browser sessions and share links.</p>
+          </section>
+        </div>
+
+        <div id="deploymentView" class="view">
+          <section class="hero-card">
+            <div class="hero-copy">
+              <p class="eyebrow">Production</p>
+              <h2>Publish and host safely</h2>
+              <p>Keep public API/Web v3 on the internet-facing port, and keep the admin console on a private port or behind a VPN/SSH tunnel.</p>
+            </div>
+            <div class="toolbar">
+              <button class="button primary" type="button" data-view-jump="backup">Backup first</button>
+              <button class="button secondary" type="button" data-view-jump="customclients">Custom Clients</button>
+            </div>
+          </section>
+
+          <div class="quick-grid">
+            <div class="metric"><span>Public API/Web v3</span><strong id="deployPublicApi">-</strong></div>
+            <div class="metric"><span>Private admin</span><strong id="deployPrivateAdmin">-</strong></div>
+            <div class="metric"><span>ID server</span><strong id="deployIdServer">-</strong></div>
+            <div class="metric"><span>Relay server</span><strong id="deployRelayServer">-</strong></div>
+          </div>
+
+          <div class="split">
+            <section class="panel">
+              <div class="panel-head"><h2>Readiness</h2></div>
+              <div id="deploymentChecklist" class="status-list"></div>
+            </section>
+            <section class="panel">
+              <div class="panel-head"><h2>Safe exposure</h2></div>
+              <dl class="config-list config-list-wide">
+                <dt>Public port</dt><dd>Expose 21114 for API and Web v3.</dd>
+                <dt>Admin port</dt><dd>Bind 21124 to localhost, VPN, or a private firewall rule.</dd>
+                <dt>Before migrate</dt><dd>Export a full backup, then test restore on the new host.</dd>
+                <dt>Custom client</dt><dd>Generate config packages after the public host/key are final.</dd>
+              </dl>
+            </section>
+          </div>
+
+          <section class="panel">
+            <div class="panel-head">
+              <h2>Commands</h2>
+              <p id="deploymentCopyStatus" class="hint compact-hint"></p>
+            </div>
+            <div class="deployment-command-grid">
+              <label>Start split admin stack<textarea id="deploySplitCommand" class="output-textarea" spellcheck="false" readonly></textarea></label>
+              <label>Open private admin by SSH tunnel<textarea id="deploySshTunnelCommand" class="output-textarea" spellcheck="false" readonly></textarea></label>
+              <label>Public readiness check<textarea id="deployPublicCheckCommand" class="output-textarea" spellcheck="false" readonly></textarea></label>
+              <label>GitHub/Docker image env<textarea id="deployImageEnv" class="output-textarea" spellcheck="false" readonly></textarea></label>
+            </div>
+            <div class="settings-actions">
+              <button class="button secondary" type="button" data-copy-deploy="deploySplitCommand">Copy stack command</button>
+              <button class="button secondary" type="button" data-copy-deploy="deploySshTunnelCommand">Copy SSH tunnel</button>
+              <button class="button secondary" type="button" data-copy-deploy="deployPublicCheckCommand">Copy check command</button>
+              <button class="button secondary" type="button" data-copy-deploy="deployImageEnv">Copy image env</button>
+            </div>
+          </section>
+        </div>
+
+        <div id="backupView" class="view">
+          <section class="panel">
+            <div class="panel-head"><h2>Backup and restore</h2></div>
+            <p class="hint compact-hint">Use full backup for whole-server migration. Use component backup when importing users, credentials, address books, or selected data from an older lejianwen/rustdesk-api instance. User and address-book backups include sensitive password hashes, OAuth secrets, and saved remote passwords.</p>
+            <h3>Components</h3>
+            <div class="permission-grid">
+              <label><input type="checkbox" data-backup-component="database"> Full database</label>
+              <label><input type="checkbox" data-backup-component="config" checked> API config</label>
+              <label><input type="checkbox" data-backup-component="server_keys" checked> Server keypair</label>
+              <label><input type="checkbox" data-backup-component="users" checked> Users and credentials</label>
+              <label><input type="checkbox" data-backup-component="address_book" checked> Address book</label>
+              <label><input type="checkbox" data-backup-component="devices"> Devices</label>
+              <label><input type="checkbox" data-backup-component="logs"> Logs and audit</label>
+            </div>
+            <div class="backup-grid">
+              <div>
+                <h3>Export</h3>
+                <p>Download a zip containing either a full backup or the selected components.</p>
+                <div class="settings-actions">
+                  <button id="exportBackupBtn" class="button secondary" type="button">Export full backup</button>
+                  <button id="exportSelectiveBackupBtn" class="button primary" type="button">Export selected</button>
+                </div>
+              </div>
+              <form id="importBackupForm">
+                <h3>Import</h3>
+                <p>Smart import detects the zip manifest or restores the components present in the file. Use selected import only when you want to force a subset.</p>
+                <input id="backupFile" type="file" accept=".zip">
+                <div class="settings-actions">
+                  <button id="inspectBackupBtn" class="button secondary" type="button">Inspect backup</button>
+                  <button class="button primary" type="submit" data-import-mode="smart">Smart import</button>
+                  <button class="button secondary" type="submit" data-import-mode="full">Import full backup</button>
+                  <button class="button secondary" type="submit" data-import-mode="selective">Import selected</button>
+                </div>
+                <pre id="backupInspect" class="code-output compact-output"></pre>
+              </form>
+            </div>
+            <p id="backupStatus" class="hint"></p>
+          </section>
+        </div>
+
+        <div id="manageView" class="view">
+          <section class="panel">
+            <div class="panel-head">
+              <div>
+                <h2 id="manageTitle">Manage</h2>
+                <p id="manageHint" class="hint compact-hint"></p>
+              </div>
+              <div class="toolbar">
+                <input id="manageSearch" class="search" placeholder="Filter rows">
+                <button id="manageCreateBtn" class="button secondary" type="button">Create</button>
+              </div>
+            </div>
+            <div class="table-wrap"><table><thead id="manageHead"></thead><tbody id="manageTable"></tbody></table></div>
+          </section>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div id="editorModal" class="modal hidden">
+    <form id="editorForm" class="modal-panel">
+      <div class="panel-head">
+        <h2 id="editorTitle">Edit</h2>
+        <button id="editorCloseBtn" class="mini-button" type="button">Close</button>
+      </div>
+      <div id="editorFields" class="form-grid"></div>
+      <details id="editorAdvanced" class="advanced-editor">
+        <summary>Advanced JSON</summary>
+        <textarea id="editorJson" spellcheck="false"></textarea>
+      </details>
+      <p id="editorError" class="form-error"></p>
+      <div class="row-actions">
+        <button id="editorDeleteBtn" class="button secondary" type="button">Delete</button>
+        <button class="button primary" type="submit">Save</button>
+      </div>
+    </form>
+  </div>
+  <div id="webV3ShareModal" class="modal hidden">
+    <form id="webV3ShareForm" class="modal-panel share-modal-panel">
+      <div class="panel-head">
+        <div>
+          <h2>Share Web v3</h2>
+          <p id="webV3SharePeer" class="hint compact-hint"></p>
+        </div>
+        <button id="webV3ShareCloseBtn" class="mini-button" type="button">Close</button>
+      </div>
+      <div class="form-grid">
+        <label>Expiration
+          <select id="webV3ShareExpire">
+            <option value="900">15 minutes</option>
+            <option value="3600" selected>1 hour</option>
+            <option value="21600">6 hours</option>
+            <option value="86400">1 day</option>
+          </select>
+        </label>
+        <label class="checkbox-label">
+          <input id="webV3ShareOnce" type="checkbox" checked>
+          Once-only token
+        </label>
+      </div>
+      <div class="permission-grid">
+        <label><input type="checkbox" data-webv3-permission="view" checked> View</label>
+        <label><input type="checkbox" data-webv3-permission="control_mouse" checked> Mouse</label>
+        <label><input type="checkbox" data-webv3-permission="control_keyboard" checked> Keyboard</label>
+        <label><input type="checkbox" data-webv3-permission="clipboard_read"> Clipboard read</label>
+        <label><input type="checkbox" data-webv3-permission="clipboard_write"> Clipboard write</label>
+        <label><input type="checkbox" data-webv3-permission="file_transfer"> File transfer</label>
+      </div>
+      <p id="webV3ShareError" class="form-error"></p>
+      <div id="webV3ShareResult" class="share-result hidden">
+        <input id="webV3ShareUrl" readonly>
+        <button id="webV3ShareCopyBtn" class="button secondary" type="button">Copy link</button>
+        <button id="webV3ShareOpenBtn" class="button secondary" type="button">Open</button>
+      </div>
+      <div class="row-actions">
+        <button id="webV3ShareCreateBtn" class="button primary" type="submit">Create share</button>
+      </div>
+    </form>
+  </div>
+  <script src="/_admin/app.js"></script>
+</body>
+</html>

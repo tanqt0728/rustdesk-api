@@ -64,6 +64,7 @@ func ApiInit(g *gin.Engine) {
 	if global.Config.App.WebClient == 1 {
 		WebClientRoutes(frg)
 	}
+	WebV3Routes(frg)
 
 	{
 		au := &api.Audit{}
@@ -102,6 +103,18 @@ func ApiInit(g *gin.Engine) {
 	PersonalRoutes(frg)
 	//访问静态文件
 	g.StaticFS("/upload", http.Dir(global.Config.Gin.ResourcesPath+"/public/upload"))
+}
+
+func WebV3Routes(frg *gin.RouterGroup) {
+	w := &api.WebV3{}
+	rg := frg.Group("/web-v3")
+	rg.GET("/config", w.Config)
+	rg.POST("/session", w.CreateSession)
+	rg.GET("/session/:session_id", w.Session)
+	rg.POST("/session/:session_id/refresh", w.Refresh)
+	rg.POST("/session/:session_id/revoke", w.Revoke)
+	rg.POST("/ws-token", w.WsToken)
+	rg.POST("/shared-peer", w.SharedPeer)
 }
 
 func PersonalRoutes(frg *gin.RouterGroup) {

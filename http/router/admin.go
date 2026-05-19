@@ -38,6 +38,8 @@ func Init(g *gin.Engine) {
 	AddressBookCollectionBind(adg)
 	AddressBookCollectionRuleBind(adg)
 	UserTokenBind(adg)
+	BackupBind(adg)
+	WebV3Bind(adg)
 
 	//deprecated by ConfigBind
 	//rs := &admin.Rustdesk{}
@@ -54,9 +56,33 @@ func Init(g *gin.Engine) {
 	//g.StaticFS("/upload", http.Dir(global.Config.Gin.ResourcesPath+"/upload"))
 }
 
+func WebV3Bind(rg *gin.RouterGroup) {
+	aR := rg.Group("/web-v3").Use(middleware.AdminPrivilege())
+	cont := &admin.WebV3{}
+	aR.POST("/share", cont.Share)
+	aR.GET("/share/list", cont.ShareList)
+	aR.POST("/share/revoke", cont.ShareRevoke)
+	aR.GET("/session/list", cont.SessionList)
+	aR.POST("/session/revoke", cont.SessionRevoke)
+	aR.POST("/session/cleanup", cont.SessionCleanup)
+	aR.GET("/audit/list", cont.AuditList)
+	aR.GET("/settings", cont.Settings)
+	aR.POST("/settings", cont.SaveSettings)
+}
+
+func BackupBind(rg *gin.RouterGroup) {
+	aR := rg.Group("/backup").Use(middleware.AdminPrivilege())
+	cont := &admin.Backup{}
+	aR.GET("/export", cont.Export)
+	aR.POST("/import", cont.Import)
+	aR.POST("/inspect", cont.Inspect)
+	aR.GET("/export-selective", cont.ExportSelective)
+	aR.POST("/import-selective", cont.ImportSelective)
+}
+
 func RustdeskCmdBind(adg *gin.RouterGroup) {
 	cont := &admin.Rustdesk{}
-	rg := adg.Group("/rustdesk")
+	rg := adg.Group("/rustdesk").Use(middleware.AdminPrivilege())
 	rg.POST("/sendCmd", cont.SendCmd)
 	rg.GET("/cmdList", cont.CmdList)
 	rg.POST("/cmdDelete", cont.CmdDelete)
@@ -240,6 +266,7 @@ func ConfigBind(rg *gin.RouterGroup) {
 
 	aR.Use(middleware.BackendUserAuth())
 	aR.GET("/server", rs.ServerConfig)
+	aR.POST("/server", middleware.AdminPrivilege(), rs.SaveServerConfig)
 	aR.GET("/app", rs.AppConfig)
 
 }

@@ -39,6 +39,9 @@ type GroupPeerPayload struct {
 	UserName        string           `json:"user_name"`
 	Note            string           `json:"note"`
 	DeviceGroupName string           `json:"device_group_name"`
+	LastOnlineIp    string           `json:"last_online_ip"`
+	LastOnlineTime  int64            `json:"last_online_time"`
+	SameClientIp    bool             `json:"same_client_ip"`
 }
 type PeerPayloadInfo struct {
 	DeviceName string `json:"device_name"`
@@ -70,4 +73,6 @@ func (gpp *GroupPeerPayload) FromPeer(p *model.Peer, username string, dGroupName
 	gpp.Note = ""
 	gpp.UserName = username
 	gpp.DeviceGroupName = dGroupName
+	gpp.LastOnlineIp = p.LastOnlineIp
+	gpp.LastOnlineTime = p.LastOnlineTime
 }

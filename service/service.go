@@ -24,6 +24,7 @@ type Service struct {
 	*ServerCmdService
 	*LdapService
 	*AppService
+	*WebV3Service
 }
 
 type Dependencies struct {

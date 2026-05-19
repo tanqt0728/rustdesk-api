@@ -19,6 +19,9 @@ admin:
   relay-server-port: 21117 # ID Server port (for server cmd)
 gin:
   api-addr: "0.0.0.0:21114"
+  # Optional. When set, /_admin and /api/admin are served only on this listener.
+  # Example for private admin: "127.0.0.1:21124" or "0.0.0.0:21124" behind VPN/firewall.
+  admin-addr: ""
   mode: "release" #release,debug,test
   resources-path: 'resources'  #对外静态文件目录
   trust-proxy: ""
