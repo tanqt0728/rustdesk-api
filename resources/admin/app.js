@@ -545,8 +545,8 @@ function renderDeployment() {
     "API_IMAGE=ghcr.io/<github-owner>/rustdesk-selfhost-qt-api:latest",
     "",
     "# Docker Hub alternative:",
-    "SERVER_IMAGE=tanqt0728/rustdesk-selfhost-qt-server:latest",
-    "API_IMAGE=tanqt0728/rustdesk-selfhost-qt-api:latest",
+    "SERVER_IMAGE=tanqt11/rustdesk-selfhost-qt-server:latest",
+    "API_IMAGE=tanqt11/rustdesk-selfhost-qt-api:latest",
   ].join("\n");
 }
 
