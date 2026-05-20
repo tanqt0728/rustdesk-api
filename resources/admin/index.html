@@ -55,6 +55,12 @@
         <form id="loginForm" class="login-form">
           <label>Username<input id="username" autocomplete="username" value="admin"></label>
           <label>Password<input id="password" type="password" autocomplete="current-password"></label>
+          <div id="captchaPanel" class="captcha-panel hidden">
+            <label>Captcha<input id="captchaInput" autocomplete="off" inputmode="text"></label>
+            <button class="captcha-image-button" type="button" id="captchaRefresh" title="Refresh captcha">
+              <img id="captchaImage" alt="Captcha">
+            </button>
+          </div>
           <button class="button primary" type="submit">Sign in</button>
           <div id="oauthPanel" class="oauth-panel hidden">
             <div class="divider"><span>or</span></div>

@@ -17,6 +17,7 @@ const state = {
   currentUserId: 0,
   addressBookMode: "mine",
   loginOptions: { ops: [], disable_pwd: false },
+  captcha: null,
   activeWebV3SharePeer: null,
 };
 
@@ -255,13 +256,18 @@ async function login(event) {
   event.preventDefault();
   $("loginError").textContent = "";
   try {
+    const payload = {
+      username: $("username").value.trim(),
+      password: $("password").value,
+      platform: navigator.platform || "web",
+    };
+    if (state.captcha?.id) {
+      payload.captcha_id = state.captcha.id;
+      payload.captcha = $("captchaInput").value.trim();
+    }
     const data = await api("/api/admin/login", {
       method: "POST",
-      body: JSON.stringify({
-        username: $("username").value.trim(),
-        password: $("password").value,
-        platform: navigator.platform || "web",
-      }),
+      body: JSON.stringify(payload),
     });
     state.token = data.token;
     state.user = data.username || $("username").value.trim();
@@ -272,6 +278,7 @@ async function login(event) {
     await boot();
   } catch (error) {
     $("loginError").textContent = error.message;
+    await refreshCaptchaIfNeeded(true);
   }
 }
 
@@ -280,12 +287,14 @@ async function loadLoginOptions() {
     const data = await api("/api/admin/login-options");
     state.loginOptions = data || { ops: [], disable_pwd: false };
     renderLoginOptions();
+    await refreshCaptchaIfNeeded(Boolean(state.loginOptions.need_captcha));
     if (state.loginOptions.auto_oidc && state.loginOptions.ops?.[0] && !state.token) {
       startOauthLogin(state.loginOptions.ops[0]);
     }
   } catch {
     state.loginOptions = { ops: [], disable_pwd: false };
     renderLoginOptions();
+    renderCaptcha();
   }
 }
 
@@ -298,6 +307,33 @@ function renderLoginOptions() {
   $("username").disabled = Boolean(state.loginOptions.disable_pwd);
   $("password").disabled = Boolean(state.loginOptions.disable_pwd);
   document.querySelector("#loginForm .button.primary").style.display = state.loginOptions.disable_pwd ? "none" : "";
+}
+
+async function refreshCaptchaIfNeeded(force = false) {
+  if (!force && !state.loginOptions.need_captcha) {
+    state.captcha = null;
+    renderCaptcha();
+    return;
+  }
+  try {
+    const data = await api("/api/admin/captcha");
+    state.captcha = data?.captcha || null;
+  } catch {
+    state.captcha = null;
+  }
+  renderCaptcha();
+}
+
+function renderCaptcha() {
+  const panel = $("captchaPanel");
+  if (!panel) return;
+  panel.classList.toggle("hidden", !state.captcha?.id);
+  $("captchaInput").value = "";
+  if (state.captcha?.b64) {
+    $("captchaImage").src = state.captcha.b64;
+  } else {
+    $("captchaImage").removeAttribute("src");
+  }
 }
 
 function providerLabel(op) {
@@ -1682,6 +1718,7 @@ async function boot() {
 }
 
 $("loginForm").addEventListener("submit", login);
+$("captchaRefresh").addEventListener("click", () => refreshCaptchaIfNeeded(true));
 $("logoutBtn").addEventListener("click", logout);
 $("refreshBtn").addEventListener("click", loadData);
 $("deviceSearch").addEventListener("input", renderDevices);

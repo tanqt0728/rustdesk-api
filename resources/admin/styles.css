@@ -107,6 +107,27 @@ h3 { font-size: 15px; margin-bottom: 8px; }
 .login-copy h2 { font-size: 34px; max-width: 560px; margin-bottom: 14px; }
 .login-copy p:last-child { max-width: 620px; color: var(--muted); line-height: 1.6; }
 .login-form { padding: 28px; display: grid; gap: 16px; align-content: center; }
+.captcha-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 150px;
+  gap: 10px;
+  align-items: end;
+}
+.captcha-image-button {
+  height: 43px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: white;
+  padding: 0;
+  cursor: pointer;
+  overflow: hidden;
+}
+.captcha-image-button img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+}
 .oauth-panel { display: grid; gap: 12px; }
 .oauth-buttons { display: grid; gap: 10px; }
 .divider {
