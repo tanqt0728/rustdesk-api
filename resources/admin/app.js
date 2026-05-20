@@ -466,15 +466,7 @@ function render() {
   $("metricUsers").textContent = state.users.length;
   $("metricAddressBook").textContent = state.addressBook.length;
   $("metricWebClient").textContent = state.app.web_client === 1 ? "On" : "Off";
-  $("cfgIdServer").textContent = state.config.id_server || "-";
-  $("cfgRelayServer").textContent = state.config.relay_server || "-";
-  $("cfgApiServer").textContent = state.config.api_server || "-";
-  $("cfgKey").textContent = state.config.key || "-";
-  $("settingsIdServer").value = state.config.id_server || "";
-  $("settingsRelayServer").value = state.config.relay_server || "";
-  $("settingsApiServer").value = state.config.api_server || "";
-  $("settingsKey").value = state.config.key || "";
-  $("settingsPrivateKey").value = "";
+  renderServerConfigFields();
   $("webV3SettingEnabled").checked = state.webV3Settings.enabled ?? state.webV3Config.enabled ?? true;
   $("webV3DefaultShareExpiry").value = state.webV3Settings.default_share_expiration_secs || 3600;
   $("webV3MaxSessionDuration").value = state.webV3Settings.max_session_duration_secs || state.webV3Config.default_session_seconds || 3600;
@@ -497,6 +489,18 @@ function render() {
   renderAudit();
   renderCustomClientBuilder();
   renderDeployment();
+}
+
+function renderServerConfigFields() {
+  $("cfgIdServer").textContent = state.config.id_server || "-";
+  $("cfgRelayServer").textContent = state.config.relay_server || "-";
+  $("cfgApiServer").textContent = state.config.api_server || "-";
+  $("cfgKey").textContent = state.config.key || "-";
+  $("settingsIdServer").value = state.config.id_server || "";
+  $("settingsRelayServer").value = state.config.relay_server || "";
+  $("settingsApiServer").value = state.config.api_server || "";
+  $("settingsKey").value = state.config.key || "";
+  $("settingsPrivateKey").value = "";
 }
 
 function renderOverview() {
@@ -1639,7 +1643,7 @@ async function saveServerSettings() {
       }),
     });
     state.config = data.config || state.config;
-    renderConfig();
+    renderServerConfigFields();
     $("settingsStatus").textContent = data.persisted
       ? "Saved. If you changed the server keypair, restart rustdesk-server and reconnect clients."
       : "Applied for this API process, but the config file was not updated. Check container permissions or Docker env overrides.";
@@ -1656,7 +1660,7 @@ async function useMountedServerKey() {
   try {
     const config = await api("/api/admin/config/server");
     state.config = config || state.config;
-    renderConfig();
+    renderServerConfigFields();
     if (state.config.key) {
       $("settingsKey").value = state.config.key;
       $("settingsStatus").textContent = "Loaded the public key currently used by the mounted server keypair.";
