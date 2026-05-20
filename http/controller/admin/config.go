@@ -3,6 +3,7 @@ package admin
 import (
 	"encoding/base64"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -59,12 +60,14 @@ func (co *Config) SaveServerConfig(c *gin.Context) {
 	req.RelayServer = strings.TrimSpace(req.RelayServer)
 	req.ApiServer = strings.TrimSpace(req.ApiServer)
 	req.Key = strings.TrimSpace(req.Key)
+	req.ServerPrivateKey = strings.TrimSpace(req.ServerPrivateKey)
 	if req.IdServer == "" || req.RelayServer == "" {
 		response.Fail(c, 101, "id_server and relay_server are required")
 		return
 	}
+	mountedKey := global.Config.Rustdesk.ReadKeyFile()
 	if req.Key == "" {
-		req.Key = global.Config.Rustdesk.ReadKeyFile()
+		req.Key = mountedKey
 	}
 	if req.Key == "" {
 		response.Fail(c, 101, "public key is required. Put id_ed25519.pub in /root/data or paste the 32-byte RustDesk public key.")
@@ -72,6 +75,19 @@ func (co *Config) SaveServerConfig(c *gin.Context) {
 	}
 	if !validRustdeskPublicKey(req.Key) {
 		response.Fail(c, 101, "invalid public key. Use the content of id_ed25519.pub only, not id_ed25519 or a config string.")
+		return
+	}
+	if req.ServerPrivateKey != "" {
+		if !validRustdeskPublicKey(req.ServerPrivateKey) {
+			response.Fail(c, 101, "invalid private key. Paste the matching 32-byte RustDesk private key from id_ed25519.")
+			return
+		}
+		if err := writeServerKeypair(req.Key, req.ServerPrivateKey); err != nil {
+			response.Fail(c, 101, "failed to write server keypair: "+err.Error())
+			return
+		}
+	} else if mountedKey != "" && req.Key != mountedKey {
+		response.Fail(c, 101, "to change the server public key from Admin, paste the matching private key too. Public key alone cannot secure connections.")
 		return
 	}
 
@@ -102,6 +118,24 @@ func (co *Config) SaveServerConfig(c *gin.Context) {
 		"persisted":     persisted,
 		"persist_error": persistError,
 	})
+}
+
+func writeServerKeypair(publicKey string, privateKey string) error {
+	pubPath := strings.TrimSpace(global.Config.Rustdesk.KeyFile)
+	if pubPath == "" {
+		pubPath = "/server-data/id_ed25519.pub"
+	}
+	if _, err := os.Stat(filepath.Dir(pubPath)); err != nil {
+		pubPath = "/server-data/id_ed25519.pub"
+	}
+	privPath := filepath.Join(filepath.Dir(pubPath), "id_ed25519")
+	if err := os.WriteFile(pubPath, []byte(publicKey), 0600); err != nil {
+		return err
+	}
+	if err := os.WriteFile(privPath, []byte(privateKey), 0600); err != nil {
+		return err
+	}
+	return nil
 }
 
 func validRustdeskPublicKey(key string) bool {

@@ -474,6 +474,7 @@ function render() {
   $("settingsRelayServer").value = state.config.relay_server || "";
   $("settingsApiServer").value = state.config.api_server || "";
   $("settingsKey").value = state.config.key || "";
+  $("settingsPrivateKey").value = "";
   $("webV3SettingEnabled").checked = state.webV3Settings.enabled ?? state.webV3Config.enabled ?? true;
   $("webV3DefaultShareExpiry").value = state.webV3Settings.default_share_expiration_secs || 3600;
   $("webV3MaxSessionDuration").value = state.webV3Settings.max_session_duration_secs || state.webV3Config.default_session_seconds || 3600;
@@ -1620,8 +1621,12 @@ async function saveServerSettings() {
   $("settingsSaveBtn").disabled = true;
   try {
     const key = $("settingsKey").value.trim();
+    const privateKey = $("settingsPrivateKey").value.trim();
     if (key && !isLikelyRustdeskPublicKey(key)) {
       throw new Error("Invalid public key. Use id_ed25519.pub, not id_ed25519 or a config string.");
+    }
+    if (privateKey && !isLikelyRustdeskPublicKey(privateKey)) {
+      throw new Error("Invalid private key. Paste the matching id_ed25519 value.");
     }
     const data = await api("/api/admin/config/server", {
       method: "POST",
@@ -1630,12 +1635,13 @@ async function saveServerSettings() {
         relay_server: $("settingsRelayServer").value.trim(),
         api_server: $("settingsApiServer").value.trim(),
         key,
+        server_private_key: privateKey,
       }),
     });
     state.config = data.config || state.config;
     renderConfig();
     $("settingsStatus").textContent = data.persisted
-      ? "Saved. Restart RustDesk clients or reconnect sessions if they are still using old endpoints."
+      ? "Saved. If you changed the server keypair, restart rustdesk-server and reconnect clients."
       : "Applied for this API process, but the config file was not updated. Check container permissions or Docker env overrides.";
     render();
   } catch (error) {
