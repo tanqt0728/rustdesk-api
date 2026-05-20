@@ -1,13 +1,15 @@
 package admin
 
 import (
+	"encoding/base64"
+	"os"
+	"strings"
+
 	"github.com/gin-gonic/gin"
 	"github.com/lejianwen/rustdesk-api/v2/global"
 	"github.com/lejianwen/rustdesk-api/v2/http/response"
 	"github.com/lejianwen/rustdesk-api/v2/model"
 	"github.com/lejianwen/rustdesk-api/v2/service"
-	"os"
-	"strings"
 
 	"github.com/spf13/viper"
 )
@@ -26,6 +28,7 @@ type Config struct {
 // @Router /admin/config/server [get]
 // @Security token
 func (co *Config) ServerConfig(c *gin.Context) {
+	global.Config.Rustdesk.LoadKeyFile()
 	cf := &response.ServerConfigResponse{
 		IdServer:    global.Config.Rustdesk.IdServer,
 		Key:         global.Config.Rustdesk.Key,
@@ -60,6 +63,17 @@ func (co *Config) SaveServerConfig(c *gin.Context) {
 		response.Fail(c, 101, "id_server and relay_server are required")
 		return
 	}
+	if req.Key == "" {
+		req.Key = global.Config.Rustdesk.ReadKeyFile()
+	}
+	if req.Key == "" {
+		response.Fail(c, 101, "public key is required. Put id_ed25519.pub in /root/data or paste the 32-byte RustDesk public key.")
+		return
+	}
+	if !validRustdeskPublicKey(req.Key) {
+		response.Fail(c, 101, "invalid public key. Use the content of id_ed25519.pub only, not id_ed25519 or a config string.")
+		return
+	}
 
 	global.Config.Rustdesk.IdServer = req.IdServer
 	global.Config.Rustdesk.RelayServer = req.RelayServer
@@ -88,6 +102,24 @@ func (co *Config) SaveServerConfig(c *gin.Context) {
 		"persisted":     persisted,
 		"persist_error": persistError,
 	})
+}
+
+func validRustdeskPublicKey(key string) bool {
+	if strings.ContainsAny(key, "\r\n\t ") {
+		return false
+	}
+	for _, enc := range []*base64.Encoding{
+		base64.StdEncoding,
+		base64.RawStdEncoding,
+		base64.URLEncoding,
+		base64.RawURLEncoding,
+	} {
+		decoded, err := enc.DecodeString(key)
+		if err == nil && len(decoded) == 32 {
+			return true
+		}
+	}
+	return false
 }
 
 func (co *Config) AppConfig(c *gin.Context) {

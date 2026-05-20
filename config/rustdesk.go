@@ -2,6 +2,7 @@ package config
 
 import (
 	"os"
+	"strings"
 )
 
 const (
@@ -25,16 +26,28 @@ type Rustdesk struct {
 
 func (rd *Rustdesk) LoadKeyFile() {
 	// Load key file
+	rd.Key = strings.TrimSpace(rd.Key)
 	if rd.Key != "" {
 		return
 	}
-	if rd.KeyFile != "" {
-		// Load key from file
-		b, err := os.ReadFile(rd.KeyFile)
-		if err != nil {
-			return
-		}
-		rd.Key = string(b)
-		return
+	if key := rd.ReadKeyFile(); key != "" {
+		rd.Key = key
 	}
+}
+
+func (rd *Rustdesk) ReadKeyFile() string {
+	for _, path := range []string{rd.KeyFile, "/server-data/id_ed25519.pub", "/data/id_ed25519.pub"} {
+		path = strings.TrimSpace(path)
+		if path == "" {
+			continue
+		}
+		b, err := os.ReadFile(path)
+		if err != nil {
+			continue
+		}
+		if key := strings.TrimSpace(string(b)); key != "" {
+			return key
+		}
+	}
+	return ""
 }

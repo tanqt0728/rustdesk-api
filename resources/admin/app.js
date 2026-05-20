@@ -1619,16 +1619,21 @@ async function saveServerSettings() {
   $("settingsStatus").textContent = "Saving server settings...";
   $("settingsSaveBtn").disabled = true;
   try {
+    const key = $("settingsKey").value.trim();
+    if (key && !isLikelyRustdeskPublicKey(key)) {
+      throw new Error("Invalid public key. Use id_ed25519.pub, not id_ed25519 or a config string.");
+    }
     const data = await api("/api/admin/config/server", {
       method: "POST",
       body: JSON.stringify({
         id_server: $("settingsIdServer").value.trim(),
         relay_server: $("settingsRelayServer").value.trim(),
         api_server: $("settingsApiServer").value.trim(),
-        key: $("settingsKey").value.trim(),
+        key,
       }),
     });
     state.config = data.config || state.config;
+    renderConfig();
     $("settingsStatus").textContent = data.persisted
       ? "Saved. Restart RustDesk clients or reconnect sessions if they are still using old endpoints."
       : "Applied for this API process, but the config file was not updated. Check container permissions or Docker env overrides.";
@@ -1638,6 +1643,27 @@ async function saveServerSettings() {
   } finally {
     $("settingsSaveBtn").disabled = false;
   }
+}
+
+async function useMountedServerKey() {
+  $("settingsStatus").textContent = "Loading mounted server key...";
+  try {
+    const config = await api("/api/admin/config/server");
+    state.config = config || state.config;
+    renderConfig();
+    if (state.config.key) {
+      $("settingsKey").value = state.config.key;
+      $("settingsStatus").textContent = "Loaded the public key currently used by the mounted server keypair.";
+    } else {
+      $("settingsStatus").textContent = "No mounted server public key was found. Check /root/data/id_ed25519.pub in the API container mount.";
+    }
+  } catch (error) {
+    $("settingsStatus").textContent = error.message;
+  }
+}
+
+function isLikelyRustdeskPublicKey(key) {
+  return /^[A-Za-z0-9+/=_-]{40,48}$/.test(key) && !/[\s]/.test(key);
 }
 
 function selectedWebV3DefaultPermissions() {
@@ -1741,6 +1767,7 @@ $("inspectBackupBtn").addEventListener("click", inspectBackup);
 $("backupFile").addEventListener("change", () => setBackupInspect(""));
 $("importBackupForm").addEventListener("submit", importBackup);
 $("settingsSaveBtn").addEventListener("click", saveServerSettings);
+$("settingsUseMountedKeyBtn").addEventListener("click", useMountedServerKey);
 $("webV3SettingsSaveBtn").addEventListener("click", saveWebV3Settings);
 $("webV3CleanupSessionsBtn").addEventListener("click", cleanupWebV3Sessions);
 $("customClientGenerateBtn").addEventListener("click", generateCustomClientOutput);
