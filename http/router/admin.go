@@ -268,6 +268,7 @@ func ConfigBind(rg *gin.RouterGroup) {
 	aR.GET("/server", rs.ServerConfig)
 	aR.POST("/server", middleware.AdminPrivilege(), rs.SaveServerConfig)
 	aR.POST("/server/keypair/generate", middleware.AdminPrivilege(), rs.GenerateServerKeypair)
+	aR.POST("/server/restart", middleware.AdminPrivilege(), rs.RestartServer)
 	aR.GET("/app", rs.AppConfig)
 
 }

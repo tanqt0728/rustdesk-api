@@ -53,6 +53,7 @@ type ServerConfigResponse struct {
 	Key              string `json:"key"`
 	MountedKey       string `json:"mounted_key,omitempty"`
 	ServerPrivateKey string `json:"server_private_key,omitempty"`
+	AutoRestart      bool   `json:"auto_restart,omitempty"`
 	RelayServer      string `json:"relay_server"`
 	ApiServer        string `json:"api_server"`
 }

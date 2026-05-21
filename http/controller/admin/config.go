@@ -2,12 +2,17 @@ package admin
 
 import (
 	"bytes"
+	"context"
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/base64"
+	"errors"
+	"net"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/lejianwen/rustdesk-api/v2/global"
@@ -84,6 +89,7 @@ func (co *Config) SaveServerConfig(c *gin.Context) {
 		response.Fail(c, 101, "invalid public key. Use the content of id_ed25519.pub only, not id_ed25519 or a config string.")
 		return
 	}
+	keypairChanged := false
 	if req.ServerPrivateKey != "" {
 		if !validRustdeskPrivateKey(req.ServerPrivateKey) {
 			response.Fail(c, 101, "invalid private key. Paste the matching 64-byte RustDesk private key from id_ed25519.")
@@ -97,6 +103,7 @@ func (co *Config) SaveServerConfig(c *gin.Context) {
 			response.Fail(c, 101, "failed to write server keypair: "+err.Error())
 			return
 		}
+		keypairChanged = true
 	} else if mountedKey != "" && req.Key != mountedKey {
 		response.Fail(c, 101, "to change the server public key from Admin, paste the matching private key too. Public key alone cannot secure connections.")
 		return
@@ -118,6 +125,14 @@ func (co *Config) SaveServerConfig(c *gin.Context) {
 		persisted = false
 		persistError = err.Error()
 	}
+	restartAttempted := false
+	restartError := ""
+	if keypairChanged && req.AutoRestart {
+		restartAttempted = true
+		if err := restartRustdeskServerContainer(); err != nil {
+			restartError = err.Error()
+		}
+	}
 
 	response.Success(c, gin.H{
 		"config": &response.ServerConfigResponse{
@@ -127,8 +142,11 @@ func (co *Config) SaveServerConfig(c *gin.Context) {
 			RelayServer: global.Config.Rustdesk.RelayServer,
 			ApiServer:   global.Config.Rustdesk.ApiServer,
 		},
-		"persisted":     persisted,
-		"persist_error": persistError,
+		"persisted":        persisted,
+		"persist_error":    persistError,
+		"restart_required": keypairChanged,
+		"restart_attempted": restartAttempted,
+		"restart_error":    restartError,
 	})
 }
 
@@ -151,6 +169,10 @@ func (co *Config) GenerateServerKeypair(c *gin.Context) {
 		persisted = false
 		persistError = err.Error()
 	}
+	restartError := ""
+	if err := restartRustdeskServerContainer(); err != nil {
+		restartError = err.Error()
+	}
 	response.Success(c, gin.H{
 		"config": &response.ServerConfigResponse{
 			IdServer:    global.Config.Rustdesk.IdServer,
@@ -159,10 +181,20 @@ func (co *Config) GenerateServerKeypair(c *gin.Context) {
 			RelayServer: global.Config.Rustdesk.RelayServer,
 			ApiServer:   global.Config.Rustdesk.ApiServer,
 		},
-		"persisted":       persisted,
-		"persist_error":   persistError,
+		"persisted":        persisted,
+		"persist_error":    persistError,
 		"restart_required": true,
+		"restart_attempted": true,
+		"restart_error":    restartError,
 	})
+}
+
+func (co *Config) RestartServer(c *gin.Context) {
+	if err := restartRustdeskServerContainer(); err != nil {
+		response.Fail(c, 101, err.Error())
+		return
+	}
+	response.Success(c, gin.H{"restarted": true})
 }
 
 func writeServerKeypair(publicKey string, privateKey string) error {
@@ -236,6 +268,34 @@ func generateRustdeskKeypair() (string, string, error) {
 		return "", "", err
 	}
 	return base64.StdEncoding.EncodeToString(publicKey), base64.StdEncoding.EncodeToString(privateKey), nil
+}
+
+func restartRustdeskServerContainer() error {
+	socket := "/var/run/docker.sock"
+	if _, err := os.Stat(socket); err != nil {
+		return errors.New("docker socket is not mounted; enable docker-compose.admin-restart.yml or restart rustdesk-server manually")
+	}
+	client := &http.Client{
+		Timeout: 15 * time.Second,
+		Transport: &http.Transport{
+			DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+				return (&net.Dialer{}).DialContext(ctx, "unix", socket)
+			},
+		},
+	}
+	req, err := http.NewRequest(http.MethodPost, "http://docker/containers/rustdesk-server/restart?t=10", nil)
+	if err != nil {
+		return err
+	}
+	res, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer res.Body.Close()
+	if res.StatusCode == http.StatusNoContent || res.StatusCode == http.StatusNotModified {
+		return nil
+	}
+	return errors.New("docker restart failed: " + res.Status)
 }
 
 func (co *Config) AppConfig(c *gin.Context) {

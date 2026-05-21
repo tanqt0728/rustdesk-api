@@ -1640,13 +1640,15 @@ async function saveServerSettings() {
         api_server: $("settingsApiServer").value.trim(),
         key,
         server_private_key: privateKey,
+        auto_restart: true,
       }),
     });
     state.config = data.config || state.config;
     renderServerConfigFields();
+    const restartMessage = restartResultMessage(data);
     $("settingsStatus").textContent = data.persisted
-      ? "Saved. If you changed the server keypair, restart rustdesk-server and reconnect clients."
-      : "Applied for this API process, but the config file was not updated. Check container permissions or Docker env overrides.";
+      ? `Saved.${restartMessage}`
+      : `Applied for this API process, but the config file was not updated. Check container permissions or Docker env overrides.${restartMessage}`;
     render();
   } catch (error) {
     $("settingsStatus").textContent = error.message;
@@ -1665,12 +1667,32 @@ async function generateServerKeypair() {
     const data = await api("/api/admin/config/server/keypair/generate", { method: "POST" });
     state.config = data.config || state.config;
     renderServerConfigFields();
-    $("settingsStatus").textContent = "Generated and saved a new server keypair. Restart rustdesk-server, then update clients to the new public key.";
+    $("settingsStatus").textContent = `Generated and saved a new server keypair.${restartResultMessage(data)} Update clients to the new public key.`;
   } catch (error) {
     $("settingsStatus").textContent = error.message;
   } finally {
     $("settingsGenerateKeyBtn").disabled = false;
   }
+}
+
+async function restartRustdeskServer() {
+  $("settingsStatus").textContent = "Restarting rustdesk-server...";
+  $("settingsRestartServerBtn").disabled = true;
+  try {
+    await api("/api/admin/config/server/restart", { method: "POST" });
+    $("settingsStatus").textContent = "rustdesk-server restarted. Reconnect clients if they are still using old sessions.";
+  } catch (error) {
+    $("settingsStatus").textContent = error.message;
+  } finally {
+    $("settingsRestartServerBtn").disabled = false;
+  }
+}
+
+function restartResultMessage(data) {
+  if (!data?.restart_required) return "";
+  if (data.restart_error) return ` Server restart failed: ${data.restart_error}`;
+  if (data.restart_attempted) return " rustdesk-server restarted.";
+  return " Restart rustdesk-server before reconnecting clients.";
 }
 
 async function useMountedServerKey() {
@@ -1803,6 +1825,7 @@ $("importBackupForm").addEventListener("submit", importBackup);
 $("settingsSaveBtn").addEventListener("click", saveServerSettings);
 $("settingsUseMountedKeyBtn").addEventListener("click", useMountedServerKey);
 $("settingsGenerateKeyBtn").addEventListener("click", generateServerKeypair);
+$("settingsRestartServerBtn").addEventListener("click", restartRustdeskServer);
 $("webV3SettingsSaveBtn").addEventListener("click", saveWebV3Settings);
 $("webV3CleanupSessionsBtn").addEventListener("click", cleanupWebV3Sessions);
 $("customClientGenerateBtn").addEventListener("click", generateCustomClientOutput);
