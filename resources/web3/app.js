@@ -476,8 +476,8 @@ function renderSession(session) {
 }
 
 function seedProtocolLocalStorage(session, config) {
-  const rendezvousServer = config?.rendezvous_server || session?.rendezvous_server || config?.rendezvous_ws_server || session?.rendezvous_ws_server;
-  const relayServer = config?.relay_server || session?.relay_server || config?.relay_ws_server || session?.relay_ws_server;
+  const rendezvousServer = config?.rendezvous_ws_server || session?.rendezvous_ws_server || config?.rendezvous_server || session?.rendezvous_server;
+  const relayServer = config?.relay_ws_server || session?.relay_ws_server || config?.relay_server || session?.relay_server;
   if (rendezvousServer) localStorage.setItem("custom-rendezvous-server", browserReachableServer(rendezvousServer, 21116));
   if (relayServer) localStorage.setItem("custom-relay-server", browserReachableServer(relayServer, 21117));
   if (config?.public_key) localStorage.setItem("key", config.public_key);
