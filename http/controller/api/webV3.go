@@ -310,13 +310,15 @@ func shouldPreferRequestHost(configuredHost string, requestHost string) bool {
 	if requestHost == "" {
 		return false
 	}
-	if configuredHost == "" || configuredHost == requestHost {
-		return true
+	if requestHost == "localhost" || requestHost == "127.0.0.1" || requestHost == "::1" {
+		return configuredHost == "" ||
+			configuredHost == requestHost ||
+			configuredHost == "host.docker.internal" ||
+			configuredHost == "rustdesk.example.com" ||
+			configuredHost == "localhost" ||
+			configuredHost == "127.0.0.1"
 	}
-	return configuredHost == "host.docker.internal" ||
-		configuredHost == "rustdesk.example.com" ||
-		configuredHost == "localhost" ||
-		configuredHost == "127.0.0.1"
+	return true
 }
 
 func rustdeskWsServer(server string, defaultPort int) string {
