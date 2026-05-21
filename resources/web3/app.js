@@ -476,7 +476,10 @@ function renderSession(session) {
 }
 
 function seedProtocolLocalStorage(session, config) {
-  if (config?.rendezvous_server) localStorage.setItem("custom-rendezvous-server", browserReachableServer(config.rendezvous_server));
+  const rendezvousServer = config?.rendezvous_ws_server || session?.rendezvous_ws_server || config?.rendezvous_server || session?.rendezvous_server;
+  const relayServer = config?.relay_ws_server || session?.relay_ws_server || config?.relay_server || session?.relay_server;
+  if (rendezvousServer) localStorage.setItem("custom-rendezvous-server", browserReachableServer(rendezvousServer, 21118));
+  if (relayServer) localStorage.setItem("custom-relay-server", browserReachableServer(relayServer, 21119));
   if (config?.public_key) localStorage.setItem("key", config.public_key);
   if (session?.peer_id) {
     localStorage.setItem("remote-id", session.peer_id);
@@ -516,12 +519,27 @@ function readProtocolPeers() {
   }
 }
 
-function browserReachableServer(server) {
+function browserReachableServer(server, fallbackPort) {
   const pageHost = window.location.hostname;
-  if (!["127.0.0.1", "localhost", "::1"].includes(pageHost)) return server;
+  const normalized = normalizeWebSocketServer(server, fallbackPort);
+  if (!["127.0.0.1", "localhost", "::1"].includes(pageHost)) return normalized;
   const parts = String(server).split(":");
   const port = parts.length > 1 ? parts[parts.length - 1] : "";
-  return port ? `${pageHost}:${port}` : server;
+  return port ? `${pageHost}:${port}` : normalized;
+}
+
+function normalizeWebSocketServer(server, fallbackPort) {
+  const value = String(server || "").trim();
+  if (!value) return "";
+  try {
+    const parsed = new URL(`ws://${value}`);
+    if (!parsed.port && fallbackPort) parsed.port = String(fallbackPort);
+    if (parsed.port === "21116") parsed.port = "21118";
+    if (parsed.port === "21117") parsed.port = "21119";
+    return parsed.host;
+  } catch {
+    return value;
+  }
 }
 
 function setStatus(status, title, text) {

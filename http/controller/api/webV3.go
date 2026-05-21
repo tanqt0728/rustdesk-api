@@ -1,6 +1,8 @@
 package api
 
 import (
+	"net"
+	"strconv"
 	"strings"
 	"time"
 
@@ -22,6 +24,8 @@ func (w *WebV3) Config(c *gin.Context) {
 		Enabled:               settings.Enabled,
 		RendezvousServer:      global.Config.Rustdesk.IdServer,
 		RelayServer:           global.Config.Rustdesk.RelayServer,
+		RendezvousWsServer:    requestRustdeskWsServer(c, global.Config.Rustdesk.IdServer, 21118),
+		RelayWsServer:         requestRustdeskWsServer(c, global.Config.Rustdesk.RelayServer, 21119),
 		PublicKey:             global.Config.Rustdesk.Key,
 		DefaultPermissions:    service.WebV3PermissionsList(settings.DefaultPermissions),
 		DefaultSessionSeconds: settings.MaxSessionDurationSecs,
@@ -59,7 +63,7 @@ func (w *WebV3) CreateSession(c *gin.Context) {
 		response.Fail(c, 101, err.Error())
 		return
 	}
-	response.Success(c, webV3SessionPayload(session, wsToken))
+	response.Success(c, webV3SessionPayload(c, session, wsToken))
 }
 
 func (w *WebV3) Session(c *gin.Context) {
@@ -68,7 +72,7 @@ func (w *WebV3) Session(c *gin.Context) {
 		response.Fail(c, 101, "session not found")
 		return
 	}
-	response.Success(c, webV3SessionPayload(session, ""))
+	response.Success(c, webV3SessionPayload(c, session, ""))
 }
 
 func (w *WebV3) Refresh(c *gin.Context) {
@@ -78,7 +82,7 @@ func (w *WebV3) Refresh(c *gin.Context) {
 		return
 	}
 	if !webV3SessionUsable(session) {
-		response.Success(c, webV3SessionPayload(session, ""))
+		response.Success(c, webV3SessionPayload(c, session, ""))
 		return
 	}
 	if err := service.AllService.WebV3Service.RefreshSession(session); err != nil {
@@ -91,7 +95,7 @@ func (w *WebV3) Refresh(c *gin.Context) {
 		return
 	}
 	_ = service.AllService.WebV3Service.CreateAudit(model.WebV3AuditWsTokenIssued, session.SessionId, session.UserId, session.ShareId, session.PeerId, c.ClientIP(), c.Request.UserAgent(), gin.H{"source": "refresh"})
-	response.Success(c, webV3SessionPayload(session, wsToken))
+	response.Success(c, webV3SessionPayload(c, session, wsToken))
 }
 
 func (w *WebV3) Revoke(c *gin.Context) {
@@ -105,7 +109,7 @@ func (w *WebV3) Revoke(c *gin.Context) {
 		return
 	}
 	_ = service.AllService.WebV3Service.CreateAudit(model.WebV3AuditSessionRevoked, session.SessionId, session.UserId, session.ShareId, session.PeerId, c.ClientIP(), c.Request.UserAgent(), gin.H{"source": "public"})
-	response.Success(c, webV3SessionPayload(session, ""))
+	response.Success(c, webV3SessionPayload(c, session, ""))
 }
 
 func (w *WebV3) WsToken(c *gin.Context) {
@@ -129,7 +133,7 @@ func (w *WebV3) WsToken(c *gin.Context) {
 		return
 	}
 	_ = service.AllService.WebV3Service.CreateAudit(model.WebV3AuditWsTokenIssued, session.SessionId, session.UserId, session.ShareId, session.PeerId, c.ClientIP(), c.Request.UserAgent(), gin.H{"source": "ws-token"})
-	response.Success(c, webV3SessionPayload(session, wsToken))
+	response.Success(c, webV3SessionPayload(c, session, wsToken))
 }
 
 func (w *WebV3) SharedPeer(c *gin.Context) {
@@ -242,21 +246,105 @@ func (w *WebV3) createShareSession(c *gin.Context, rawToken string) (*model.WebV
 	return session, wsToken, nil
 }
 
-func webV3SessionPayload(session *model.WebV3Session, wsToken string) apiResp.WebV3SessionResponse {
+func webV3SessionPayload(c *gin.Context, session *model.WebV3Session, wsToken string) apiResp.WebV3SessionResponse {
 	return apiResp.WebV3SessionResponse{
-		SessionId:        session.SessionId,
-		PeerId:           session.PeerId,
-		PeerName:         session.PeerName,
-		PeerPlatform:     session.PeerPlatform,
-		RendezvousServer: global.Config.Rustdesk.IdServer,
-		RelayServer:      global.Config.Rustdesk.RelayServer,
-		PublicKey:        global.Config.Rustdesk.Key,
-		WsToken:          wsToken,
-		Permissions:      service.WebV3PermissionsList(session.Permissions),
-		ExpiresAt:        session.ExpiresAt,
-		Status:           session.Status,
-		IceOrRelayPolicy: "rustdesk-relay",
+		SessionId:          session.SessionId,
+		PeerId:             session.PeerId,
+		PeerName:           session.PeerName,
+		PeerPlatform:       session.PeerPlatform,
+		RendezvousServer:   global.Config.Rustdesk.IdServer,
+		RelayServer:        global.Config.Rustdesk.RelayServer,
+		RendezvousWsServer: requestRustdeskWsServer(c, global.Config.Rustdesk.IdServer, 21118),
+		RelayWsServer:      requestRustdeskWsServer(c, global.Config.Rustdesk.RelayServer, 21119),
+		PublicKey:          global.Config.Rustdesk.Key,
+		WsToken:            wsToken,
+		Permissions:        service.WebV3PermissionsList(session.Permissions),
+		ExpiresAt:          session.ExpiresAt,
+		Status:             session.Status,
+		IceOrRelayPolicy:   "rustdesk-relay",
 	}
+}
+
+func requestRustdeskWsServer(c *gin.Context, configured string, defaultPort int) string {
+	requestHost := requestHostname(c)
+	configuredHost := serverHostname(configured)
+	if requestHost != "" && shouldPreferRequestHost(configuredHost, requestHost) {
+		return net.JoinHostPort(requestHost, strconv.Itoa(defaultPort))
+	}
+	return rustdeskWsServer(configured, defaultPort)
+}
+
+func requestHostname(c *gin.Context) string {
+	host := strings.TrimSpace(c.GetHeader("X-Forwarded-Host"))
+	if host == "" {
+		host = c.Request.Host
+	}
+	hostname, _, err := net.SplitHostPort(host)
+	if err == nil {
+		return hostname
+	}
+	if strings.Contains(host, ":") {
+		parts := strings.Split(host, ":")
+		if len(parts) > 0 {
+			return parts[0]
+		}
+	}
+	return host
+}
+
+func serverHostname(server string) string {
+	host, _, err := net.SplitHostPort(strings.TrimSpace(server))
+	if err == nil {
+		return host
+	}
+	parts := strings.Split(server, ":")
+	if len(parts) > 1 {
+		return strings.Join(parts[:len(parts)-1], ":")
+	}
+	return strings.TrimSpace(server)
+}
+
+func shouldPreferRequestHost(configuredHost string, requestHost string) bool {
+	configuredHost = strings.ToLower(strings.TrimSpace(configuredHost))
+	requestHost = strings.ToLower(strings.TrimSpace(requestHost))
+	if requestHost == "" {
+		return false
+	}
+	if configuredHost == "" || configuredHost == requestHost {
+		return true
+	}
+	return configuredHost == "host.docker.internal" ||
+		configuredHost == "rustdesk.example.com" ||
+		configuredHost == "localhost" ||
+		configuredHost == "127.0.0.1"
+}
+
+func rustdeskWsServer(server string, defaultPort int) string {
+	server = strings.TrimSpace(server)
+	if server == "" {
+		return ""
+	}
+	host, portText, err := net.SplitHostPort(server)
+	if err != nil {
+		parts := strings.Split(server, ":")
+		if len(parts) > 1 {
+			host = strings.Join(parts[:len(parts)-1], ":")
+			portText = parts[len(parts)-1]
+		} else {
+			return net.JoinHostPort(server, strconv.Itoa(defaultPort))
+		}
+	}
+	port, err := strconv.Atoi(portText)
+	if err != nil {
+		return net.JoinHostPort(host, strconv.Itoa(defaultPort))
+	}
+	switch port {
+	case 21116:
+		port = 21118
+	case 21117:
+		port = 21119
+	}
+	return net.JoinHostPort(host, strconv.Itoa(port))
 }
 
 func webV3CurrentUserFromBearer(c *gin.Context) *model.User {
