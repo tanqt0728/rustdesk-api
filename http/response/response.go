@@ -51,6 +51,7 @@ func Error(c *gin.Context, message string) {
 type ServerConfigResponse struct {
 	IdServer         string `json:"id_server"`
 	Key              string `json:"key"`
+	MountedKey       string `json:"mounted_key,omitempty"`
 	ServerPrivateKey string `json:"server_private_key,omitempty"`
 	RelayServer      string `json:"relay_server"`
 	ApiServer        string `json:"api_server"`

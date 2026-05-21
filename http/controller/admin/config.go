@@ -1,6 +1,9 @@
 package admin
 
 import (
+	"bytes"
+	"crypto/ed25519"
+	"crypto/rand"
 	"encoding/base64"
 	"os"
 	"path/filepath"
@@ -29,10 +32,14 @@ type Config struct {
 // @Router /admin/config/server [get]
 // @Security token
 func (co *Config) ServerConfig(c *gin.Context) {
-	global.Config.Rustdesk.LoadKeyFile()
+	mountedKey := global.Config.Rustdesk.ReadKeyFile()
+	if strings.TrimSpace(global.Config.Rustdesk.Key) == "" && mountedKey != "" {
+		global.Config.Rustdesk.Key = mountedKey
+	}
 	cf := &response.ServerConfigResponse{
 		IdServer:    global.Config.Rustdesk.IdServer,
 		Key:         global.Config.Rustdesk.Key,
+		MountedKey:  mountedKey,
 		RelayServer: global.Config.Rustdesk.RelayServer,
 		ApiServer:   global.Config.Rustdesk.ApiServer,
 	}
@@ -78,8 +85,12 @@ func (co *Config) SaveServerConfig(c *gin.Context) {
 		return
 	}
 	if req.ServerPrivateKey != "" {
-		if !validRustdeskPublicKey(req.ServerPrivateKey) {
-			response.Fail(c, 101, "invalid private key. Paste the matching 32-byte RustDesk private key from id_ed25519.")
+		if !validRustdeskPrivateKey(req.ServerPrivateKey) {
+			response.Fail(c, 101, "invalid private key. Paste the matching 64-byte RustDesk private key from id_ed25519.")
+			return
+		}
+		if !matchingRustdeskKeypair(req.Key, req.ServerPrivateKey) {
+			response.Fail(c, 101, "public key and private key do not match.")
 			return
 		}
 		if err := writeServerKeypair(req.Key, req.ServerPrivateKey); err != nil {
@@ -112,11 +123,45 @@ func (co *Config) SaveServerConfig(c *gin.Context) {
 		"config": &response.ServerConfigResponse{
 			IdServer:    global.Config.Rustdesk.IdServer,
 			Key:         global.Config.Rustdesk.Key,
+			MountedKey:  global.Config.Rustdesk.ReadKeyFile(),
 			RelayServer: global.Config.Rustdesk.RelayServer,
 			ApiServer:   global.Config.Rustdesk.ApiServer,
 		},
 		"persisted":     persisted,
 		"persist_error": persistError,
+	})
+}
+
+func (co *Config) GenerateServerKeypair(c *gin.Context) {
+	publicKey, privateKey, err := generateRustdeskKeypair()
+	if err != nil {
+		response.Fail(c, 101, "failed to generate server keypair: "+err.Error())
+		return
+	}
+	if err := writeServerKeypair(publicKey, privateKey); err != nil {
+		response.Fail(c, 101, "failed to write server keypair: "+err.Error())
+		return
+	}
+	global.Config.Rustdesk.Key = publicKey
+	v := viper.GetViper()
+	v.Set("rustdesk.key", publicKey)
+	persisted := true
+	persistError := ""
+	if err := v.WriteConfig(); err != nil {
+		persisted = false
+		persistError = err.Error()
+	}
+	response.Success(c, gin.H{
+		"config": &response.ServerConfigResponse{
+			IdServer:    global.Config.Rustdesk.IdServer,
+			Key:         publicKey,
+			MountedKey:  publicKey,
+			RelayServer: global.Config.Rustdesk.RelayServer,
+			ApiServer:   global.Config.Rustdesk.ApiServer,
+		},
+		"persisted":       persisted,
+		"persist_error":   persistError,
+		"restart_required": true,
 	})
 }
 
@@ -139,8 +184,21 @@ func writeServerKeypair(publicKey string, privateKey string) error {
 }
 
 func validRustdeskPublicKey(key string) bool {
+	return validBase64KeyBytes(key, 32)
+}
+
+func validRustdeskPrivateKey(key string) bool {
+	return validBase64KeyBytes(key, 64)
+}
+
+func validBase64KeyBytes(key string, wantLen int) bool {
+	_, ok := decodeBase64KeyBytes(key, wantLen)
+	return ok
+}
+
+func decodeBase64KeyBytes(key string, wantLen int) ([]byte, bool) {
 	if strings.ContainsAny(key, "\r\n\t ") {
-		return false
+		return nil, false
 	}
 	for _, enc := range []*base64.Encoding{
 		base64.StdEncoding,
@@ -149,11 +207,35 @@ func validRustdeskPublicKey(key string) bool {
 		base64.RawURLEncoding,
 	} {
 		decoded, err := enc.DecodeString(key)
-		if err == nil && len(decoded) == 32 {
-			return true
+		if err == nil && len(decoded) == wantLen {
+			return decoded, true
 		}
 	}
-	return false
+	return nil, false
+}
+
+func matchingRustdeskKeypair(publicKey string, privateKey string) bool {
+	pub, ok := decodeBase64KeyBytes(publicKey, ed25519.PublicKeySize)
+	if !ok {
+		return false
+	}
+	priv, ok := decodeBase64KeyBytes(privateKey, ed25519.PrivateKeySize)
+	if !ok {
+		return false
+	}
+	derived, ok := ed25519.PrivateKey(priv).Public().(ed25519.PublicKey)
+	if !ok {
+		return false
+	}
+	return bytes.Equal(pub, derived)
+}
+
+func generateRustdeskKeypair() (string, string, error) {
+	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		return "", "", err
+	}
+	return base64.StdEncoding.EncodeToString(publicKey), base64.StdEncoding.EncodeToString(privateKey), nil
 }
 
 func (co *Config) AppConfig(c *gin.Context) {

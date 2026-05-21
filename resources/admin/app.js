@@ -1629,7 +1629,7 @@ async function saveServerSettings() {
     if (key && !isLikelyRustdeskPublicKey(key)) {
       throw new Error("Invalid public key. Use id_ed25519.pub, not id_ed25519 or a config string.");
     }
-    if (privateKey && !isLikelyRustdeskPublicKey(privateKey)) {
+    if (privateKey && !isLikelyRustdeskPrivateKey(privateKey)) {
       throw new Error("Invalid private key. Paste the matching id_ed25519 value.");
     }
     const data = await api("/api/admin/config/server", {
@@ -1655,16 +1655,36 @@ async function saveServerSettings() {
   }
 }
 
+async function generateServerKeypair() {
+  if (!window.confirm("Generate and install a new server keypair? Existing clients must update their server key and reconnect.")) {
+    return;
+  }
+  $("settingsStatus").textContent = "Generating server keypair...";
+  $("settingsGenerateKeyBtn").disabled = true;
+  try {
+    const data = await api("/api/admin/config/server/keypair/generate", { method: "POST" });
+    state.config = data.config || state.config;
+    renderServerConfigFields();
+    $("settingsStatus").textContent = "Generated and saved a new server keypair. Restart rustdesk-server, then update clients to the new public key.";
+  } catch (error) {
+    $("settingsStatus").textContent = error.message;
+  } finally {
+    $("settingsGenerateKeyBtn").disabled = false;
+  }
+}
+
 async function useMountedServerKey() {
   $("settingsStatus").textContent = "Loading mounted server key...";
   try {
     const config = await api("/api/admin/config/server");
     state.config = config || state.config;
-    renderServerConfigFields();
-    if (state.config.key) {
-      $("settingsKey").value = state.config.key;
+    const mountedKey = state.config.mounted_key || "";
+    if (mountedKey) {
+      state.config.key = mountedKey;
+      renderServerConfigFields();
       $("settingsStatus").textContent = "Loaded the public key currently used by the mounted server keypair.";
     } else {
+      renderServerConfigFields();
       $("settingsStatus").textContent = "No mounted server public key was found. Check /root/data/id_ed25519.pub in the API container mount.";
     }
   } catch (error) {
@@ -1674,6 +1694,10 @@ async function useMountedServerKey() {
 
 function isLikelyRustdeskPublicKey(key) {
   return /^[A-Za-z0-9+/=_-]{40,48}$/.test(key) && !/[\s]/.test(key);
+}
+
+function isLikelyRustdeskPrivateKey(key) {
+  return /^[A-Za-z0-9+/=_-]{84,92}$/.test(key) && !/[\s]/.test(key);
 }
 
 function selectedWebV3DefaultPermissions() {
@@ -1778,6 +1802,7 @@ $("backupFile").addEventListener("change", () => setBackupInspect(""));
 $("importBackupForm").addEventListener("submit", importBackup);
 $("settingsSaveBtn").addEventListener("click", saveServerSettings);
 $("settingsUseMountedKeyBtn").addEventListener("click", useMountedServerKey);
+$("settingsGenerateKeyBtn").addEventListener("click", generateServerKeypair);
 $("webV3SettingsSaveBtn").addEventListener("click", saveWebV3Settings);
 $("webV3CleanupSessionsBtn").addEventListener("click", cleanupWebV3Sessions);
 $("customClientGenerateBtn").addEventListener("click", generateCustomClientOutput);

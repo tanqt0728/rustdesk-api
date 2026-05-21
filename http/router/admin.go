@@ -267,6 +267,7 @@ func ConfigBind(rg *gin.RouterGroup) {
 	aR.Use(middleware.BackendUserAuth())
 	aR.GET("/server", rs.ServerConfig)
 	aR.POST("/server", middleware.AdminPrivilege(), rs.SaveServerConfig)
+	aR.POST("/server/keypair/generate", middleware.AdminPrivilege(), rs.GenerateServerKeypair)
 	aR.GET("/app", rs.AppConfig)
 
 }
