@@ -1,4 +1,4 @@
-const WEB3_BUILD = "20260519-input-layer1";
+const WEB3_BUILD = "20260521-relay-entry1";
 console.info("QT Desk Web v3 build", WEB3_BUILD);
 
 const els = {
@@ -681,11 +681,14 @@ function installPublicProbeBlocker() {
 
   function PatchedWebSocket(url, protocols) {
     try {
-      const parsed = new URL(String(url));
+      let targetUrl = String(url);
+      let parsed = new URL(targetUrl);
+      targetUrl = preferredRelayWebSocketUrl(targetUrl, parsed);
+      parsed = new URL(targetUrl);
       if (blockedHosts.has(parsed.hostname) && parsed.port === "21118") {
-        return new QuietBlockedWebSocket(url);
+        return new QuietBlockedWebSocket(targetUrl);
       }
-      const socket = protocols === undefined ? new NativeWebSocket(url) : new NativeWebSocket(url, protocols);
+      const socket = protocols === undefined ? new NativeWebSocket(targetUrl) : new NativeWebSocket(targetUrl, protocols);
       watchRustDeskSocket(socket, parsed);
       return socket;
     } catch {
@@ -701,6 +704,22 @@ function installPublicProbeBlocker() {
   PatchedWebSocket.prototype = NativeWebSocket.prototype;
   window.WebSocket = PatchedWebSocket;
   window.__qtDeskWebSocketPatched = true;
+}
+
+function preferredRelayWebSocketUrl(url, parsed) {
+  if (parsed.port !== "21119") return url;
+  const relayServer = normalizeNativeServer(localStorage.getItem("custom-relay-server"), 21117);
+  if (!relayServer) return url;
+  try {
+    const relay = new URL(`ws://${relayServer.replace(/^wss?:\/\//i, "")}`);
+    const nativePort = Number(relay.port || "21117");
+    const target = new URL(url);
+    target.hostname = relay.hostname;
+    target.port = String(nativePort === 21119 ? 21119 : nativePort + 2);
+    return target.toString();
+  } catch {
+    return url;
+  }
 }
 
 function watchRustDeskSocket(socket, parsed) {
