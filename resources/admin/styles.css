@@ -89,6 +89,11 @@ h3 { font-size: 15px; margin-bottom: 8px; }
 .button.primary:hover { background: var(--accent-strong); }
 .button.secondary { background: white; color: var(--text); }
 .button-link { display: inline-flex; align-items: center; justify-content: center; text-decoration: none; }
+.settings-checkbox {
+  min-height: 43px;
+  align-self: end;
+  color: var(--text);
+}
 .hidden { display: none !important; }
 .login-panel {
   min-height: 520px;

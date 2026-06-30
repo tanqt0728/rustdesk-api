@@ -366,6 +366,12 @@
               <label>API server<input id="settingsApiServer" autocomplete="off"></label>
               <label>Public key<input id="settingsKey" autocomplete="off"></label>
               <label>Private key<input id="settingsPrivateKey" autocomplete="off" type="password" placeholder="Only needed when changing server key"></label>
+              <label>API token expiry<input id="settingsTokenExpire" autocomplete="off" placeholder="168h"></label>
+              <label>JWT expiry<input id="settingsJwtExpire" autocomplete="off" placeholder="168h"></label>
+              <label class="checkbox-label settings-checkbox">
+                <input id="settingsMustLogin" type="checkbox">
+                Require login for native connections
+              </label>
             </div>
             <div class="settings-actions admin-only">
               <button id="settingsSaveBtn" class="button primary" type="button">Save server settings</button>

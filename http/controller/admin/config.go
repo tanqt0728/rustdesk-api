@@ -7,6 +7,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"errors"
+	"io"
 	"net"
 	"net/http"
 	"os"
@@ -17,6 +18,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/lejianwen/rustdesk-api/v2/global"
 	"github.com/lejianwen/rustdesk-api/v2/http/response"
+	jwtlib "github.com/lejianwen/rustdesk-api/v2/lib/jwt"
 	"github.com/lejianwen/rustdesk-api/v2/model"
 	"github.com/lejianwen/rustdesk-api/v2/service"
 
@@ -47,6 +49,9 @@ func (co *Config) ServerConfig(c *gin.Context) {
 		MountedKey:  mountedKey,
 		RelayServer: global.Config.Rustdesk.RelayServer,
 		ApiServer:   global.Config.Rustdesk.ApiServer,
+		MustLogin:   currentMustLogin(),
+		TokenExpire: global.Config.App.TokenExpire.String(),
+		JwtExpire:   global.Config.Jwt.ExpireDuration.String(),
 	}
 	response.Success(c, cf)
 }
@@ -73,8 +78,20 @@ func (co *Config) SaveServerConfig(c *gin.Context) {
 	req.ApiServer = strings.TrimSpace(req.ApiServer)
 	req.Key = strings.TrimSpace(req.Key)
 	req.ServerPrivateKey = strings.TrimSpace(req.ServerPrivateKey)
+	req.TokenExpire = strings.TrimSpace(req.TokenExpire)
+	req.JwtExpire = strings.TrimSpace(req.JwtExpire)
 	if req.IdServer == "" || req.RelayServer == "" {
 		response.Fail(c, 101, "id_server and relay_server are required")
+		return
+	}
+	tokenExpire, err := parsePositiveDuration(req.TokenExpire, global.Config.App.TokenExpire)
+	if err != nil {
+		response.Fail(c, 101, "invalid token expiry duration: "+err.Error())
+		return
+	}
+	jwtExpire, err := parsePositiveDuration(req.JwtExpire, global.Config.Jwt.ExpireDuration)
+	if err != nil {
+		response.Fail(c, 101, "invalid JWT expiry duration: "+err.Error())
 		return
 	}
 	mountedKey := global.Config.Rustdesk.ReadKeyFile()
@@ -113,17 +130,35 @@ func (co *Config) SaveServerConfig(c *gin.Context) {
 	global.Config.Rustdesk.RelayServer = req.RelayServer
 	global.Config.Rustdesk.ApiServer = req.ApiServer
 	global.Config.Rustdesk.Key = req.Key
+	global.Config.App.TokenExpire = tokenExpire
+	global.Config.Jwt.ExpireDuration = jwtExpire
+	global.Jwt = jwtlib.NewJwt(global.Config.Jwt.Key, global.Config.Jwt.ExpireDuration)
+	service.Jwt = global.Jwt
 
 	v := viper.GetViper()
 	v.Set("rustdesk.id-server", req.IdServer)
 	v.Set("rustdesk.relay-server", req.RelayServer)
 	v.Set("rustdesk.api-server", req.ApiServer)
 	v.Set("rustdesk.key", req.Key)
+	v.Set("app.token-expire", tokenExpire.String())
+	v.Set("jwt.expire-duration", jwtExpire.String())
+	v.Set("server.must-login", req.MustLogin)
+	serverEnvPersisted := true
+	serverEnvError := ""
+	if err := persistServerRuntimeEnv(req.MustLogin); err != nil {
+		serverEnvPersisted = false
+		serverEnvError = err.Error()
+	}
 	persisted := true
 	persistError := ""
 	if err := v.WriteConfig(); err != nil {
 		persisted = false
 		persistError = err.Error()
+	}
+	liveApplyAttempted := true
+	liveApplyError := ""
+	if err := applyMustLoginLive(req.MustLogin); err != nil {
+		liveApplyError = err.Error()
 	}
 	restartAttempted := false
 	restartError := ""
@@ -141,12 +176,19 @@ func (co *Config) SaveServerConfig(c *gin.Context) {
 			MountedKey:  global.Config.Rustdesk.ReadKeyFile(),
 			RelayServer: global.Config.Rustdesk.RelayServer,
 			ApiServer:   global.Config.Rustdesk.ApiServer,
+			MustLogin:   currentMustLogin(),
+			TokenExpire: global.Config.App.TokenExpire.String(),
+			JwtExpire:   global.Config.Jwt.ExpireDuration.String(),
 		},
 		"persisted":        persisted,
 		"persist_error":    persistError,
 		"restart_required": keypairChanged,
 		"restart_attempted": restartAttempted,
 		"restart_error":    restartError,
+		"live_apply_attempted": liveApplyAttempted,
+		"live_apply_error":    liveApplyError,
+		"server_env_persisted": serverEnvPersisted,
+		"server_env_error":    serverEnvError,
 	})
 }
 
@@ -180,6 +222,9 @@ func (co *Config) GenerateServerKeypair(c *gin.Context) {
 			MountedKey:  publicKey,
 			RelayServer: global.Config.Rustdesk.RelayServer,
 			ApiServer:   global.Config.Rustdesk.ApiServer,
+			MustLogin:   currentMustLogin(),
+			TokenExpire: global.Config.App.TokenExpire.String(),
+			JwtExpire:   global.Config.Jwt.ExpireDuration.String(),
 		},
 		"persisted":        persisted,
 		"persist_error":    persistError,
@@ -296,6 +341,80 @@ func restartRustdeskServerContainer() error {
 		return nil
 	}
 	return errors.New("docker restart failed: " + res.Status)
+}
+
+func parsePositiveDuration(raw string, fallback time.Duration) (time.Duration, error) {
+	if raw == "" {
+		if fallback > 0 {
+			return fallback, nil
+		}
+		return 168 * time.Hour, nil
+	}
+	duration, err := time.ParseDuration(raw)
+	if err != nil {
+		return 0, err
+	}
+	if duration <= 0 {
+		return 0, errors.New("duration must be greater than zero")
+	}
+	return duration, nil
+}
+
+func currentMustLogin() bool {
+	v := viper.GetViper()
+	if v.IsSet("server.must-login") {
+		return v.GetBool("server.must-login")
+	}
+	envValue := strings.EqualFold(os.Getenv("MUST_LOGIN"), "Y") || strings.EqualFold(os.Getenv("MUST_LOGIN"), "true")
+	return envValue
+}
+
+func applyMustLoginLive(enabled bool) error {
+	addrs := []string{
+		"127.0.0.1:21115",
+		"host.docker.internal:21115",
+		"rustdesk-server:21115",
+	}
+	var conn net.Conn
+	var err error
+	for _, addr := range addrs {
+		conn, err = net.DialTimeout("tcp", addr, 3*time.Second)
+		if err == nil {
+			break
+		}
+	}
+	if conn == nil {
+		return errors.New("could not reach hbbs command port on 127.0.0.1, host.docker.internal, or rustdesk-server; restart rustdesk-server to apply MUST_LOGIN")
+	}
+	defer conn.Close()
+	value := "N"
+	if enabled {
+		value = "Y"
+	}
+	if _, err := conn.Write([]byte("must-login " + value)); err != nil {
+		return err
+	}
+	_ = conn.SetReadDeadline(time.Now().Add(3 * time.Second))
+	_, _ = io.ReadAll(conn)
+	return nil
+}
+
+func persistServerRuntimeEnv(mustLogin bool) error {
+	pubPath := strings.TrimSpace(global.Config.Rustdesk.KeyFile)
+	if pubPath == "" {
+		pubPath = "/server-data/id_ed25519.pub"
+	}
+	dir := filepath.Dir(pubPath)
+	if _, err := os.Stat(dir); err != nil {
+		dir = "/server-data"
+	}
+	value := "N"
+	if mustLogin {
+		value = "Y"
+	}
+	path := filepath.Join(dir, "server.env")
+	content := "MUST_LOGIN=" + value + "\n"
+	return os.WriteFile(path, []byte(content), 0600)
 }
 
 func (co *Config) AppConfig(c *gin.Context) {

@@ -501,6 +501,9 @@ function renderServerConfigFields() {
   $("settingsApiServer").value = state.config.api_server || "";
   $("settingsKey").value = state.config.key || "";
   $("settingsPrivateKey").value = "";
+  $("settingsTokenExpire").value = state.config.token_expire || "168h";
+  $("settingsJwtExpire").value = state.config.jwt_expire || state.config.token_expire || "168h";
+  $("settingsMustLogin").checked = Boolean(state.config.must_login);
 }
 
 function renderOverview() {
@@ -1640,6 +1643,9 @@ async function saveServerSettings() {
         api_server: $("settingsApiServer").value.trim(),
         key,
         server_private_key: privateKey,
+        token_expire: $("settingsTokenExpire").value.trim(),
+        jwt_expire: $("settingsJwtExpire").value.trim(),
+        must_login: $("settingsMustLogin").checked,
         auto_restart: true,
       }),
     });
@@ -1647,8 +1653,8 @@ async function saveServerSettings() {
     renderServerConfigFields();
     const restartMessage = restartResultMessage(data);
     $("settingsStatus").textContent = data.persisted
-      ? `Saved.${restartMessage}`
-      : `Applied for this API process, but the config file was not updated. Check container permissions or Docker env overrides.${restartMessage}`;
+      ? `Saved.${serverEnvMessage(data)}${liveApplyMessage(data)}${restartMessage}`
+      : `Applied for this API process, but the config file was not updated. Check container permissions or Docker env overrides.${serverEnvMessage(data)}${liveApplyMessage(data)}${restartMessage}`;
     render();
   } catch (error) {
     $("settingsStatus").textContent = error.message;
@@ -1693,6 +1699,17 @@ function restartResultMessage(data) {
   if (data.restart_error) return ` Server restart failed: ${data.restart_error}`;
   if (data.restart_attempted) return " rustdesk-server restarted.";
   return " Restart rustdesk-server before reconnecting clients.";
+}
+
+function liveApplyMessage(data) {
+  if (!data?.live_apply_attempted) return "";
+  if (data.live_apply_error) return ` Native login policy was saved but not live-applied: ${data.live_apply_error}`;
+  return " Native login policy live-applied.";
+}
+
+function serverEnvMessage(data) {
+  if (data?.server_env_persisted === false) return ` Restart-safe server env was not written: ${data.server_env_error || "unknown error"}`;
+  return "";
 }
 
 async function useMountedServerKey() {
