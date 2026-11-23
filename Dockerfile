@@ -17,7 +17,7 @@ FROM alpine:3.24
 WORKDIR /app
 RUN apk upgrade --no-cache \
   && apk add --no-cache ca-certificates tzdata \
-  && apk info -v musl
+  && apk list -I musl
 
 COPY --from=builder /out/ /app/
 
