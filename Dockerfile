@@ -1,4 +1,4 @@
-FROM golang:1.23-alpine AS builder
+FROM golang:1.27-alpine3.24 AS builder
 
 WORKDIR /src
 RUN apk add --no-cache build-base git tzdata
@@ -12,10 +12,12 @@ RUN go mod tidy \
   && mkdir -p /out/data /out/runtime \
   && cp -a resources docs conf /out/
 
-FROM alpine:3.20
+FROM alpine:3.24
 
 WORKDIR /app
-RUN apk add --no-cache ca-certificates tzdata
+RUN apk upgrade --no-cache \
+  && apk add --no-cache ca-certificates tzdata \
+  && apk info -v musl
 
 COPY --from=builder /out/ /app/
 
