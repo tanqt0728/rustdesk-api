@@ -41,14 +41,16 @@ func ApiInit() {
 func newEngine() *gin.Engine {
 	g := gin.New()
 
-	//[WARNING] You trusted all proxies, this is NOT safe. We recommend you to set a value.
-	//Please check https://pkg.go.dev/github.com/gin-gonic/gin#readme-don-t-trust-all-proxies for details.
+	// Empty trust-proxy means "trust no proxy": ClientIP() is the socket peer, so
+	// X-Forwarded-For cannot be spoofed to dodge the login ban. gin's default
+	// (nil config) trusts every proxy. Set trust-proxy to the reverse proxy's
+	// address when one sits in front of the API.
+	var trusted []string
 	if global.Config.Gin.TrustProxy != "" {
-		pro := strings.Split(global.Config.Gin.TrustProxy, ",")
-		err := g.SetTrustedProxies(pro)
-		if err != nil {
-			panic(err)
-		}
+		trusted = strings.Split(global.Config.Gin.TrustProxy, ",")
+	}
+	if err := g.SetTrustedProxies(trusted); err != nil {
+		panic(err)
 	}
 
 	if global.Config.Gin.Mode == gin.ReleaseMode {
